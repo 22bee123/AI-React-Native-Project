@@ -1,3 +1,45 @@
+# GULUGOD App
+
+A modern React Native application built with Expo.
+
+## Project Structure
+
+```
+frontend/
+├── app/                      # Main application code (Expo Router)
+│   ├── index.js              # Splash Screen component
+│   ├── home.js               # Home Screen component
+│   └── _layout.js            # Navigation layout
+├── assets/                   # Static assets
+│   └── images/
+│       └── gulugod_logo.png  # App logo
+└── index.js                  # Entry point for the application
+```
+
+## Getting Started
+
+1. Make sure you have Node.js and npm installed
+2. Install dependencies: `npm install`
+3. Start the development server: `npm start`
+4. Follow instructions to launch on iOS or Android
+
+## Running on Android
+
+```
+npm run android
+```
+
+## Running on iOS
+
+```
+npm run ios
+```
+
+## Notes
+
+- Make sure to add your logo at `assets/images/gulugod_logo.png`
+- The app starts with a splash screen and transitions to the home screen
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
