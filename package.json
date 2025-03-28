@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.4",
+    "expo-camera": "^16.0.18"
+  }
+}
