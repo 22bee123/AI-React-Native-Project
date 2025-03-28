@@ -34,8 +34,6 @@ const SplashScreen = () => {
         />
       </View>
       
-      <Text style={styles.logoText}>GULUGOD</Text>
-      
       <TouchableOpacity
         onPress={navigateToHome}
         activeOpacity={0.8}
