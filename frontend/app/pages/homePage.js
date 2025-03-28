@@ -6,46 +6,54 @@ import {
   SafeAreaView,
   StatusBar,
   Platform,
+  LogBox
 } from 'react-native';
-import { router } from 'expo-router';
-import { useCameraPermissions } from 'expo-camera';
+import { useLocalSearchParams } from 'expo-router';
 
 // Import components
 import Navbar from '../../components/navbar/navbar';
 import CameraComponent from '../../components/navbar/camera';
 import FolderComponent from '../../components/navbar/folder';
 
+// Ignore specific warnings (if needed)
+LogBox.ignoreLogs([
+  'ViewPropTypes will be removed from React Native',
+]);
+
 const HomePage = () => {
+  const params = useLocalSearchParams();
+  
+  // Set up state for active tab
   const [activeTab, setActiveTab] = useState('home');
-  const [cameraVisible, setCameraVisible] = useState(false);
   const [userImages, setUserImages] = useState([]);
-  const [permission, requestPermission] = useCameraPermissions();
+  
+  // Initialize with camera tab if coming from splash screen
+  useEffect(() => {
+    if (params.initialTab === 'camera') {
+      setActiveTab('camera');
+    }
+  }, [params.initialTab]);
 
-  // Handle camera tab press
-  const handleCameraPress = () => {
-    setActiveTab('camera');
-    setCameraVisible(true);
-  };
-
-  // Handle gallery tab press
+  // Handle tab navigation
   const handleGalleryPress = () => {
     setActiveTab('gallery');
-    setCameraVisible(false);
   };
 
-  // Handle home tab press
   const handleHomePress = () => {
     setActiveTab('home');
-    setCameraVisible(false);
+  };
+
+  const handleCameraPress = () => {
+    setActiveTab('camera');
   };
 
   // Render home content
   const renderHomeContent = () => {
     return (
-      <View style={styles.contentContainer}>
-        <Text style={styles.headerText}>Posture Analysis System</Text>
+      <View style={styles.homeContent}>
+        <Text style={styles.welcomeText}>Welcome to GuluGod Posture</Text>
         <Text style={styles.descriptionText}>
-          Welcome to GULUGOD Posture Analysis System. Use the camera to analyze your posture or check your gallery to view past analyses.
+          Use the camera to analyze your posture or browse your saved images in the gallery.
         </Text>
       </View>
     );
@@ -55,7 +63,7 @@ const HomePage = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      {/* Top Navigation Bar */}
+      {/* Navbar at top */}
       <View style={styles.navbarContainer}>
         <Navbar 
           activeTab={activeTab}
@@ -65,21 +73,10 @@ const HomePage = () => {
         />
       </View>
       
-      {/* Welcome Text */}
-      {!cameraVisible && (
-        <Text style={styles.welcomeText}>GULUGOD</Text>
-      )}
-      
-      {/* Main Content */}
-      <View style={styles.content}>
-        {activeTab === 'camera' && (
-          <CameraComponent />
-        )}
-        
-        {activeTab === 'gallery' && (
-          <FolderComponent images={userImages} />
-        )}
-        
+      {/* Content area */}
+      <View style={styles.contentContainer}>
+        {activeTab === 'camera' && <CameraComponent />}
+        {activeTab === 'gallery' && <FolderComponent images={userImages} />}
         {activeTab === 'home' && renderHomeContent()}
       </View>
     </SafeAreaView>
@@ -93,40 +90,36 @@ const styles = StyleSheet.create({
   },
   navbarContainer: {
     width: '100%',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  welcomeText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1A5741',
-    marginTop: 10,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  headerText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-    textAlign: 'center',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   contentContainer: {
+    flex: 1,
     width: '100%',
+    backgroundColor: '#F9FAFB',
+  },
+  homeContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
-    borderRadius: 10,
-    backgroundColor: '#f9f9f9',
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1A5741',
     marginBottom: 20,
+    textAlign: 'center',
   },
   descriptionText: {
     fontSize: 16,
-    color: '#444',
+    color: '#666666',
     textAlign: 'center',
     lineHeight: 24,
   }

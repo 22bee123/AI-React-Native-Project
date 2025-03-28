@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { 
   View, 
   Text, 
@@ -6,7 +6,7 @@ import {
   Image, 
   TouchableOpacity,
   StatusBar,
-  Dimensions 
+  Dimensions
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,9 +14,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width, height } = Dimensions.get('window');
 
 const SplashScreen = () => {
-  // Navigate to home page
+  // Navigate to home page with camera tab active
   const navigateToHome = () => {
-    router.replace('/pages/homePage');
+    router.replace({
+      pathname: '/pages/homePage',
+      params: { initialTab: 'camera' }
+    });
   };
 
   return (
@@ -36,6 +39,7 @@ const SplashScreen = () => {
       <TouchableOpacity
         onPress={navigateToHome}
         activeOpacity={0.8}
+        style={styles.buttonContainer}
       >
         <LinearGradient
           colors={['#1A5741', '#1e6e54']}
@@ -74,17 +78,20 @@ const styles = StyleSheet.create({
     marginBottom: 60,
     letterSpacing: 2,
   },
+  buttonContainer: {
+    width: width * 0.7,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
   button: {
     paddingVertical: 16,
     paddingHorizontal: 40,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
   buttonText: {
     color: '#FFFFFF',

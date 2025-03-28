@@ -4,7 +4,8 @@ import {
   Text, 
   StyleSheet, 
   Image,
-  FlatList
+  FlatList,
+  TouchableOpacity
 } from 'react-native';
 
 const FolderComponent = ({ images = [] }) => {
@@ -21,13 +22,17 @@ const FolderComponent = ({ images = [] }) => {
 
   const renderImage = ({ item }) => {
     return (
-      <View style={styles.imageContainer}>
+      <TouchableOpacity 
+        style={styles.imageContainer}
+        onPress={() => console.log('Image pressed')}
+        activeOpacity={0.7}
+      >
         <Image 
           source={{ uri: item.uri }} 
           style={styles.image} 
           resizeMode="cover"
         />
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -44,6 +49,8 @@ const FolderComponent = ({ images = [] }) => {
           keyExtractor={(item, index) => index.toString()}
           numColumns={3}
           contentContainerStyle={styles.imageList}
+          initialNumToRender={12}
+          removeClippedSubviews={true}
         />
       )}
     </View>
@@ -85,6 +92,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 8,
     overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
   },
   image: {
     width: '100%',

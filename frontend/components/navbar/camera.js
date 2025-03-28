@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   TouchableOpacity,
   Button,
-  Dimensions
+  Dimensions,
+  Platform
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,14 +20,14 @@ const CameraComponent = () => {
   const [analyzing, setAnalyzing] = useState(false);
 
   // Toggle camera facing
-  const toggleCameraFacing = () => {
+  const toggleCameraFacing = useCallback(() => {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
-  };
+  }, []);
 
   // Toggle analysis mode
-  const toggleAnalysis = () => {
-    setAnalyzing(!analyzing);
-  };
+  const toggleAnalysis = useCallback(() => {
+    setAnalyzing(prev => !prev);
+  }, []);
 
   // Render posture analysis overlay
   const renderPostureAnalysisOverlay = () => {
@@ -92,21 +93,35 @@ const CameraComponent = () => {
         
         {/* Camera controls */}
         <View style={styles.controlsContainer}>
-          <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing}>
+          {/* Flip camera button */}
+          <TouchableOpacity 
+            onPress={toggleCameraFacing} 
+            style={styles.controlButton}
+            activeOpacity={0.7}
+          >
             <MaterialIcons name="flip-camera-ios" size={28} color="white" />
             <Text style={styles.buttonText}>Flip</Text>
           </TouchableOpacity>
           
+          {/* Analyze posture button */}
           <TouchableOpacity 
-            style={[styles.analyzeButton, analyzing && styles.analyzeButtonActive]} 
             onPress={toggleAnalysis}
+            style={[
+              styles.analyzeButton,
+              analyzing && styles.analyzeButtonActive
+            ]}
+            activeOpacity={0.7}
           >
             <Text style={styles.analyzeButtonText}>
               {analyzing ? 'Stop Analysis' : 'Analyze Posture'}
             </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.controlButton}>
+          {/* Gallery button */}
+          <TouchableOpacity 
+            style={styles.controlButton}
+            activeOpacity={0.7}
+          >
             <MaterialIcons name="photo-library" size={28} color="white" />
             <Text style={styles.buttonText}>Gallery</Text>
           </TouchableOpacity>
@@ -219,10 +234,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 20,
+    zIndex: 20,
   },
   controlButton: {
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 10,
+    minWidth: 70,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 10,
   },
   buttonText: {
     color: 'white',
@@ -235,6 +255,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
+    minWidth: 170,
+    alignItems: 'center',
   },
   analyzeButtonActive: {
     backgroundColor: 'rgba(209, 58, 58, 0.8)',
@@ -243,7 +265,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
-  },
+  }
 });
 
 export default CameraComponent;

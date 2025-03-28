@@ -4,24 +4,39 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity,
-  Image
+  Image,
+  Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+
+// Simple button component for all platforms
+const SimpleButton = ({ onPress, style, isActive, children }) => {
+  return (
+    <TouchableOpacity 
+      style={[styles.baseButton, style, isActive && styles.activeButton]} 
+      onPress={onPress}
+      activeOpacity={0.6}
+    >
+      {children}
+      {isActive && <View style={styles.activeIndicator} />}
+    </TouchableOpacity>
+  );
+};
 
 const Navbar = ({ activeTab, handleGalleryPress, handleHomePress, handleCameraPress }) => {
   return (
     <View style={styles.navbar}>
-      <TouchableOpacity 
-        style={[styles.navItem, activeTab === 'gallery' && styles.activeNavItem]} 
+      <SimpleButton 
+        isActive={activeTab === 'gallery'} 
         onPress={handleGalleryPress}
       >
         <View style={styles.iconContainer}>
           <MaterialIcons name="folder" size={24} color="#1A5741" />
         </View>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.navItem, activeTab === 'home' && styles.activeNavItem]} 
+      </SimpleButton>
+
+      <SimpleButton 
+        isActive={activeTab === 'home'} 
         onPress={handleHomePress}
       >
         <View style={styles.logoContainer}>
@@ -31,16 +46,16 @@ const Navbar = ({ activeTab, handleGalleryPress, handleHomePress, handleCameraPr
             resizeMode="contain"
           />
         </View>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.navItem, activeTab === 'camera' && styles.activeNavItem]} 
+      </SimpleButton>
+
+      <SimpleButton 
+        isActive={activeTab === 'camera'} 
         onPress={handleCameraPress}
       >
         <View style={styles.iconContainer}>
           <MaterialIcons name="camera-alt" size={24} color="#1A5741" />
         </View>
-      </TouchableOpacity>
+      </SimpleButton>
     </View>
   );
 };
@@ -51,28 +66,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    height: 60,
+    height: 65,
     width: '100%',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
     paddingHorizontal: 20,
     paddingTop: 5,
     paddingBottom: 5,
-    elevation: 2,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
-  navItem: {
+  baseButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 50,
-    width: 50,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'transparent',
   },
-  activeNavItem: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#1A5741',
+  activeButton: {
+    backgroundColor: 'rgba(230, 248, 244, 0.5)',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: 30,
+    height: 2,
+    backgroundColor: '#1A5741',
   },
   iconContainer: {
     alignItems: 'center',
