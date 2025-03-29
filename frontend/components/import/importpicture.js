@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -25,12 +25,16 @@ const ImportPicture = ({ onImportResult, onClose }) => {
   // New states for folder saving functionality
   const [analysisResult, setAnalysisResult] = useState(null);
   const [savingModalVisible, setSavingModalVisible] = useState(false);
-  const [folders, setFolders] = useState([
-    { id: 'default', name: 'All Images', images: [] }
-  ]);
-  const [folderForNewImage, setFolderForNewImage] = useState('default');
+  const [folders, setFolders] = useState([]);
+  const [folderForNewImage, setFolderForNewImage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [noFoldersVisible, setNoFoldersVisible] = useState(false);
+  
+  // Load folders when component mounts
+  useEffect(() => {
+    loadSavedFolders();
+  }, []);
   
   // Pick image from device gallery
   const pickImage = async () => {
@@ -75,24 +79,46 @@ const ImportPicture = ({ onImportResult, onClose }) => {
   const loadSavedFolders = async () => {
     try {
       const savedFolders = await FolderManager.loadSavedFolders([]);
-      if (savedFolders.length > 0) {
+      console.log('Loaded folders:', savedFolders);
+      
+      // If no folders exist, prompt to create one
+      if (!savedFolders || savedFolders.length === 0) {
+        setFolders([]);
+        setNoFoldersVisible(true);
+        setFolderForNewImage(null);
+      } else {
         setFolders(savedFolders);
+        setNoFoldersVisible(false);
+        
+        // Select first folder as default if none selected
+        if (!folderForNewImage && savedFolders.length > 0) {
+          setFolderForNewImage(savedFolders[0].id);
+        }
       }
     } catch (error) {
       console.error('Error loading folders:', error);
+      setFolders([]);
+      setNoFoldersVisible(true);
     }
   };
   
   // Create a new folder
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     const newFolder = FolderManager.createFolder(newFolderName, folders);
     if (newFolder) {
-      setFolders([...folders, newFolder]);
+      const updatedFolders = [...folders, newFolder];
+      setFolders(updatedFolders);
       setModalVisible(false);
       setNewFolderName('');
+      setNoFoldersVisible(false);
       
       // Select the newly created folder
       setFolderForNewImage(newFolder.id);
+      
+      // Show folder selection modal if we're in the middle of saving
+      if (analysisResult) {
+        setSavingModalVisible(true);
+      }
     } else {
       Alert.alert('Error', 'Could not create folder. Please check the name.');
     }
@@ -100,12 +126,13 @@ const ImportPicture = ({ onImportResult, onClose }) => {
   
   // Show create folder modal
   const showCreateFolderModal = () => {
+    setSavingModalVisible(false);
     setModalVisible(true);
   };
   
   // Confirm saving the image to selected folder
   const confirmSaveImage = () => {
-    if (!selectedImage || !analysisResult) return;
+    if (!selectedImage || !analysisResult || !folderForNewImage) return;
     
     const imageData = {
       uri: selectedImage,
@@ -132,6 +159,12 @@ const ImportPicture = ({ onImportResult, onClose }) => {
     
     // Close the import screen after successful save
     handleClose();
+  };
+  
+  // Handle cancellation of save
+  const handleSaveCancellation = () => {
+    setSavingModalVisible(false);
+    Alert.alert('Cancelled', 'Image was not saved');
   };
   
   // Analyze the selected image
@@ -216,16 +249,51 @@ const ImportPicture = ({ onImportResult, onClose }) => {
       // Load folders before showing the folder selection modal
       await loadSavedFolders();
       
-      // Show folder selection modal instead of passing results immediately
-      setSavingModalVisible(true);
+      // Check if we have folders to save to
+      if (folders.length === 0) {
+        // No folders exist, prompt to create one
+        Alert.alert(
+          'No Folders',
+          'You need to create a folder before saving images.',
+          [
+            {
+              text: 'Create Folder',
+              onPress: () => setModalVisible(true)
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => handleSaveCancellation()
+            }
+          ]
+        );
+      } else {
+        // Show folder selection modal
+        setSavingModalVisible(true);
+      }
     } catch (error) {
       console.error('Error analyzing image:', error);
       Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
-      setIsAnalyzing(false);
     } finally {
       setIsAnalyzing(false);
     }
   };
+  
+  // Render "No folders" placeholder
+  const renderNoFolders = () => (
+    <View style={styles.noFoldersContainer}>
+      <MaterialIcons name="folder" size={64} color="#666" />
+      <Text style={styles.noFoldersText}>No folders yet</Text>
+      <Text style={styles.noFoldersSubText}>Create a folder to save your images</Text>
+      <TouchableOpacity
+        style={styles.createFolderButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <MaterialIcons name="create-new-folder" size={24} color="#FFFFFF" />
+        <Text style={styles.createFolderButtonText}>Create Folder</Text>
+      </TouchableOpacity>
+    </View>
+  );
   
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -289,16 +357,18 @@ const ImportPicture = ({ onImportResult, onClose }) => {
         </Text>
         
         {/* Save to Folder Modal */}
-        <SaveToFolderModal
-          visible={savingModalVisible}
-          onClose={() => setSavingModalVisible(false)}
-          folders={folders}
-          folderForNewImage={folderForNewImage}
-          onSelectFolder={(folderId) => setFolderForNewImage(folderId)}
-          onCreateNewFolder={showCreateFolderModal}
-          onConfirmSave={confirmSaveImage}
-          styles={styles}
-        />
+        {folders.length > 0 && (
+          <SaveToFolderModal
+            visible={savingModalVisible}
+            onClose={handleSaveCancellation}
+            folders={folders}
+            folderForNewImage={folderForNewImage}
+            onSelectFolder={(folderId) => setFolderForNewImage(folderId)}
+            onCreateNewFolder={showCreateFolderModal}
+            onConfirmSave={confirmSaveImage}
+            styles={styles}
+          />
+        )}
         
         {/* New Folder Modal */}
         <Modal
@@ -334,6 +404,22 @@ const ImportPicture = ({ onImportResult, onClose }) => {
             </View>
           </View>
         </Modal>
+        
+        {/* No Folders Modal */}
+        {noFoldersVisible && savingModalVisible && (
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={true}
+            onRequestClose={handleSaveCancellation}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                {renderNoFolders()}
+              </View>
+            </View>
+          </Modal>
+        )}
       </View>
     </TouchableWithoutFeedback>
   );
@@ -513,6 +599,38 @@ const styles = StyleSheet.create({
     color: '#1A5741',
     marginLeft: 10,
   },
+  // No folders styles
+  noFoldersContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  noFoldersText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  noFoldersSubText: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  createFolderButton: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(26, 87, 65, 0.8)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  createFolderButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    marginLeft: 10,
+  }
 });
 
 export default ImportPicture;

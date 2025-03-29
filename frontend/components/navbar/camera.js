@@ -61,12 +61,11 @@ const CameraComponent = ({ onSaveResult }) => {
   const [savingModalVisible, setSavingModalVisible] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
   const [pendingResult, setPendingResult] = useState(null);
-  const [folders, setFolders] = useState([
-    { id: 'default', name: 'All Images', images: [] }
-  ]);
-  const [folderForNewImage, setFolderForNewImage] = useState('default');
+  const [folders, setFolders] = useState([]);
+  const [folderForNewImage, setFolderForNewImage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [noFoldersVisible, setNoFoldersVisible] = useState(false);
   
   // Load model on component mount
   useEffect(() => {
@@ -492,59 +491,103 @@ const CameraComponent = ({ onSaveResult }) => {
         angle: spineAngle.toString()
       };
       
-      // Instead of immediately saving, set pending data and show folder selection
-      await loadSavedFolders();
+      console.log('Saving image with result:', result);
       
       // Store pending image data
       setPendingImage(photo.uri);
       setPendingResult(result);
       
-      // Show folder selection modal
-      setSavingModalVisible(true);
+      // Load folders
+      try {
+        const savedFolders = await FolderManager.loadSavedFolders([]);
+        console.log('Loaded folders for saving:', savedFolders);
+        
+        if (!savedFolders || savedFolders.length === 0) {
+          // No folders exist, prompt to create one
+          setFolders([]);
+          setNoFoldersVisible(true);
+          
+          Alert.alert(
+            'No Folders',
+            'You need to create a folder before saving images.',
+            [
+              {
+                text: 'Create Folder',
+                onPress: () => setModalVisible(true)
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => handleSaveCancellation()
+              }
+            ]
+          );
+        } else {
+          // We have folders, show the folder selection modal
+          setFolders(savedFolders);
+          setNoFoldersVisible(false);
+          
+          // Select first folder as default if none selected
+          if ((!folderForNewImage || folderForNewImage === 'default') && savedFolders.length > 0) {
+            setFolderForNewImage(savedFolders[0].id);
+          }
+          
+          // Explicitly show the saving modal
+          console.log('Showing folder selection modal');
+          setSavingModalVisible(true);
+        }
+      } catch (error) {
+        console.error('Error loading folders for saving:', error);
+        Alert.alert(
+          'Error',
+          'Could not load folders. Please try again later.',
+          [{ text: 'OK', onPress: () => handleSaveCancellation() }]
+        );
+      }
       
       setIsProcessing(false);
     } catch (error) {
       console.error('Error saving analysis:', error);
       Alert.alert('Error', 'Could not save the analysis');
       setIsProcessing(false);
-    }
-  };
-  
-  // Load saved folders from storage
-  const loadSavedFolders = async () => {
-    try {
-      const savedFolders = await FolderManager.loadSavedFolders([]);
-      if (savedFolders.length > 0) {
-        setFolders(savedFolders);
-      }
-    } catch (error) {
-      console.error('Error loading folders:', error);
-    }
-  };
-  
-  // Create a new folder
-  const handleCreateFolder = () => {
-    const newFolder = FolderManager.createFolder(newFolderName, folders);
-    if (newFolder) {
-      setFolders([...folders, newFolder]);
-      setModalVisible(false);
-      setNewFolderName('');
       
-      // Select the newly created folder
-      setFolderForNewImage(newFolder.id);
-    } else {
-      Alert.alert('Error', 'Could not create folder. Please check the name.');
+      // Reset pending data
+      setPendingImage(null);
+      setPendingResult(null);
     }
   };
   
   // Show create folder modal
   const showCreateFolderModal = () => {
+    setSavingModalVisible(false);
     setModalVisible(true);
+  };
+  
+  // Create a new folder
+  const handleCreateFolder = async () => {
+    const newFolder = FolderManager.createFolder(newFolderName, folders);
+    if (newFolder) {
+      const updatedFolders = [...folders, newFolder];
+      setFolders(updatedFolders);
+      setModalVisible(false);
+      setNewFolderName('');
+      
+      // Select the newly created folder
+      setFolderForNewImage(newFolder.id);
+      
+      // Show folder selection modal again after creating a folder
+      setSavingModalVisible(true);
+    } else {
+      Alert.alert('Error', 'Could not create folder. Please check the name.');
+    }
   };
   
   // Confirm saving the image to selected folder
   const confirmSaveImage = () => {
-    if (!pendingImage || !pendingResult) return;
+    if (!pendingImage || !pendingResult || !folderForNewImage) {
+      Alert.alert('Error', 'Missing required information to save image');
+      return;
+    }
     
     const imageData = {
       uri: pendingImage,
@@ -862,6 +905,22 @@ const CameraComponent = ({ onSaveResult }) => {
     setShowImport(false);
   };
 
+  // Render "No folders" placeholder
+  const renderNoFolders = () => (
+    <View style={styles.noFoldersContainer}>
+      <MaterialIcons name="folder" size={64} color="#666" />
+      <Text style={styles.noFoldersText}>No folders yet</Text>
+      <Text style={styles.noFoldersSubText}>Create a folder to save your images</Text>
+      <TouchableOpacity
+        style={styles.createFolderButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <MaterialIcons name="create-new-folder" size={24} color="#FFFFFF" />
+        <Text style={styles.createFolderButtonText}>Create Folder</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   if (!permission) {
     // Camera permissions are still loading
     return (
@@ -987,16 +1046,18 @@ const CameraComponent = ({ onSaveResult }) => {
       </Modal>
       
       {/* Save to Folder Modal */}
-      <SaveToFolderModal
-        visible={savingModalVisible}
-        onClose={handleSaveCancellation}
-        folders={folders}
-        folderForNewImage={folderForNewImage}
-        onSelectFolder={(folderId) => setFolderForNewImage(folderId)}
-        onCreateNewFolder={showCreateFolderModal}
-        onConfirmSave={confirmSaveImage}
-        styles={styles}
-      />
+      {folders.length > 0 && (
+        <SaveToFolderModal
+          visible={savingModalVisible}
+          onClose={handleSaveCancellation}
+          folders={folders}
+          folderForNewImage={folderForNewImage}
+          onSelectFolder={(folderId) => setFolderForNewImage(folderId)}
+          onCreateNewFolder={showCreateFolderModal}
+          onConfirmSave={confirmSaveImage}
+          styles={styles}
+        />
+      )}
       
       {/* New Folder Modal */}
       <Modal
@@ -1032,6 +1093,22 @@ const CameraComponent = ({ onSaveResult }) => {
           </View>
         </View>
       </Modal>
+      
+      {/* No Folders Modal */}
+      {noFoldersVisible && savingModalVisible && (
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={true}
+          onRequestClose={handleSaveCancellation}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              {renderNoFolders()}
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -1353,6 +1430,37 @@ const styles = StyleSheet.create({
   },
   newFolderText: {
     color: '#1A5741',
+    marginLeft: 10,
+  },
+  noFoldersContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  noFoldersText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  noFoldersSubText: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  createFolderButton: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(26, 87, 65, 0.8)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  createFolderButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
     marginLeft: 10,
   },
 });
