@@ -42,10 +42,10 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
   const [lastTapTime, setLastTapTime] = useState(0);
   const DOUBLE_TAP_DELAY = 300; // ms between taps to count as double tap
 
-  // Load saved folders from storage on component mount
+  // Load saved folders from storage on component mount and when images change
   useEffect(() => {
     loadSavedFoldersData();
-  }, []);
+  }, [images]);
 
   const loadSavedFoldersData = async () => {
     try {
@@ -84,6 +84,8 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
       if (savingModalVisible) {
         setFolderForNewImage(newFolder.id);
       }
+    } else {
+      Alert.alert('Error', 'Could not create folder. Please check the name.');
     }
   };
 
@@ -101,7 +103,6 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
     setSavingModalVisible(false);
     setNewImageData(null);
     
-    // In a real app, save to persistent storage
     Alert.alert('Success', 'Image saved successfully');
   };
 
@@ -154,8 +155,9 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
       setRenameModalVisible(false);
       setEditingFolder(null);
       
-      // In a real app, save to persistent storage
       Alert.alert('Success', 'Folder renamed successfully');
+    } else {
+      Alert.alert('Error', 'Could not rename folder. Please check the name.');
     }
   };
 
@@ -202,7 +204,6 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
     setDeleteFolderModalVisible(false);
     setFolderToDelete(null);
     
-    // In a real app, update persistent storage
     Alert.alert('Success', 'Folder deleted successfully');
   };
 
@@ -232,7 +233,6 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
     // Close image modal if it was open
     setShowResultModal(false);
     
-    // In a real app, update persistent storage
     Alert.alert('Success', 'Image deleted successfully');
   };
 

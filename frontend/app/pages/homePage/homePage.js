@@ -52,8 +52,8 @@ const HomePage = () => {
   };
   
   // Handle saving image results from camera
-  const handleSaveResult = (imageUri, result) => {
-    console.log('Saving result:', imageUri, result);
+  const handleSaveResult = (imageUri, result, source = 'camera') => {
+    console.log('Saving result from source:', source, imageUri, result);
     
     // Save the image with its prediction result
     const newImage = {
@@ -66,9 +66,13 @@ const HomePage = () => {
     // Update local state with the new image
     setUserImages(prevImages => [newImage, ...prevImages]);
     
-    // Store for pending save to folder
-    setPendingSaveData(newImage);
-    setShouldSaveImage(true);
+    // Only automatically save to folder if it's coming from camera
+    // Import images don't need folder saving as they'll be saved manually
+    if (source === 'camera') {
+      // Store for pending save to folder
+      setPendingSaveData(newImage);
+      setShouldSaveImage(true);
+    }
     
     // Switch to gallery tab to show the result
     setActiveTab('gallery');

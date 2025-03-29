@@ -471,8 +471,9 @@ const CameraComponent = ({ onSaveResult }) => {
       };
       
       // Pass to parent for saving (will be handled in homePage.js)
+      // Include 'camera' as the source to indicate this is from the camera view
       if (onSaveResult) {
-        onSaveResult(photo.uri, result);
+        onSaveResult(photo.uri, result, 'camera');
       } else {
         Alert.alert('Success', 'Image captured! (Note: Save functionality not fully connected)');
       }
@@ -764,7 +765,8 @@ const CameraComponent = ({ onSaveResult }) => {
   // Handle imported image result
   const handleImportResult = (imageUri, result) => {
     if (onSaveResult) {
-      onSaveResult(imageUri, result);
+      // Include 'import' as the source to indicate this is from an imported image
+      onSaveResult(imageUri, result, 'import');
     } else {
       Alert.alert('Success', 'Image analyzed successfully! (Note: Save functionality not fully connected)');
     }
