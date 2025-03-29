@@ -196,11 +196,13 @@ export const ImageResultModal = ({
         <View style={styles.resultModalContent}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
-              style={styles.closeButton}
+              style={styles.backButton}
               onPress={onClose}
             >
-              <MaterialIcons name="close" size={24} color="#1A5741" />
+              <MaterialIcons name="arrow-back" size={24} color="#1A5741" />
             </TouchableOpacity>
+            
+            <Text style={styles.modalHeaderTitle}>Result Details</Text>
             
             <TouchableOpacity
               style={styles.deleteImageButton}
