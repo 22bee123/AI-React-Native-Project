@@ -43,6 +43,9 @@ export const styles = StyleSheet.create({
   selectedFolder: {
     backgroundColor: '#1A5741',
   },
+  deletableFolderButton: {
+    paddingRight: 8,
+  },
   folderText: {
     color: '#1A5741',
     fontWeight: '500',
@@ -347,8 +350,8 @@ export const styles = StyleSheet.create({
     padding: 5,
   },
   deleteIcon: {
-    alignSelf: 'center',
-    marginBottom: 15,
+    marginLeft: 4,
+    opacity: 0.7,
   },
   deleteButton: {
     backgroundColor: '#ff6b6b',

@@ -135,6 +135,9 @@ const FolderManager = {
       return { updatedFolders: folders, newCurrentFolder: currentFolder };
     }
     
+    // This method is triggered from the long press handler in index.js
+    // The confirmation dialog is shown to the user before calling this method
+    
     // Remove folder from list
     const updatedFolders = folders.filter(f => f.id !== folder.id);
     

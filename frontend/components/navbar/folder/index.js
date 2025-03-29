@@ -248,7 +248,19 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
       return;
     }
     
-    handleFolderDelete(folder);
+    // Show confirmation dialog directly when long pressing a folder
+    Alert.alert(
+      'Delete Folder',
+      `Are you sure you want to delete the folder "${folder.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: () => handleFolderDelete(folder) 
+        }
+      ]
+    );
   };
 
   // Get current folder's images

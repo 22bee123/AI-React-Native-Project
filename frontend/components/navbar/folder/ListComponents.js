@@ -17,10 +17,14 @@ export const FolderItem = ({
 }) => (
   <TouchableOpacity
     key={folder.id}
-    style={[styles.folderButton, isSelected && styles.selectedFolder]}
+    style={[
+      styles.folderButton, 
+      isSelected && styles.selectedFolder,
+      folder.id !== 'default' && styles.deletableFolderButton
+    ]}
     onPress={() => onPress(folder)}
     onLongPress={() => onLongPress(folder)}
-    delayLongPress={500}
+    delayLongPress={400}
     activeOpacity={0.7}
   >
     <MaterialIcons 
@@ -34,6 +38,14 @@ export const FolderItem = ({
     <Text style={[styles.imageCount, isSelected && styles.selectedFolderText]}>
       {folder.images.length}
     </Text>
+    {folder.id !== 'default' && (
+      <MaterialIcons 
+        name="delete-outline" 
+        size={14} 
+        color={isSelected ? "#FFFFFF" : "#1A5741"} 
+        style={styles.deleteIcon}
+      />
+    )}
   </TouchableOpacity>
 );
 

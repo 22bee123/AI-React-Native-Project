@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  TouchableWithoutFeedback,
+  Keyboard
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -41,6 +43,17 @@ const ImportPicture = ({ onImportResult, onClose }) => {
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+  
+  // Handle the close button press - ensure it always works
+  const handleClose = () => {
+    // Dismiss the keyboard first if it's open
+    Keyboard.dismiss();
+    
+    // Then call the onClose function
+    if (onClose) {
+      onClose();
     }
   };
   
@@ -138,60 +151,67 @@ const ImportPicture = ({ onImportResult, onClose }) => {
   };
   
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Import Posture Image</Text>
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <MaterialIcons name="close" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.imageContainer}>
-        {selectedImage ? (
-          <Image source={{ uri: selectedImage }} style={styles.image} />
-        ) : (
-          <View style={styles.placeholderContainer}>
-            <MaterialIcons name="image" size={80} color="#ccc" />
-            <Text style={styles.placeholderText}>Select an image to analyze</Text>
-          </View>
-        )}
-      </View>
-      
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={styles.button} 
-          onPress={pickImage}
-          disabled={isAnalyzing}
-        >
-          <MaterialIcons name="photo-library" size={24} color="#fff" />
-          <Text style={styles.buttonText}>Select Image</Text>
-        </TouchableOpacity>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Import Posture Image</Text>
+          <TouchableOpacity 
+            onPress={handleClose} 
+            style={styles.closeButton}
+            hitSlop={{top: 15, right: 15, bottom: 15, left: 15}}
+            activeOpacity={0.6}
+          >
+            <MaterialIcons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
         
-        <TouchableOpacity 
-          style={[
-            styles.button, 
-            styles.analyzeButton,
-            (!selectedImage || isAnalyzing) && styles.disabledButton
-          ]} 
-          onPress={analyzeImage}
-          disabled={!selectedImage || isAnalyzing}
-        >
-          {isAnalyzing ? (
-            <ActivityIndicator color="#fff" size="small" />
+        <View style={styles.imageContainer}>
+          {selectedImage ? (
+            <Image source={{ uri: selectedImage }} style={styles.image} />
           ) : (
-            <>
-              <MaterialIcons name="analytics" size={24} color="#fff" />
-              <Text style={styles.buttonText}>Analyze Posture</Text>
-            </>
+            <View style={styles.placeholderContainer}>
+              <MaterialIcons name="image" size={80} color="#ccc" />
+              <Text style={styles.placeholderText}>Select an image to analyze</Text>
+            </View>
           )}
-        </TouchableOpacity>
+        </View>
+        
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={pickImage}
+            disabled={isAnalyzing}
+          >
+            <MaterialIcons name="photo-library" size={24} color="#fff" />
+            <Text style={styles.buttonText}>Select Image</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[
+              styles.button, 
+              styles.analyzeButton,
+              (!selectedImage || isAnalyzing) && styles.disabledButton
+            ]} 
+            onPress={analyzeImage}
+            disabled={!selectedImage || isAnalyzing}
+          >
+            {isAnalyzing ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <MaterialIcons name="analytics" size={24} color="#fff" />
+                <Text style={styles.buttonText}>Analyze Posture</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+        
+        <Text style={styles.instructionText}>
+          Please select a clear image of a person's back where the spine is visible.
+          For best results, ensure the person is standing straight with good lighting.
+        </Text>
       </View>
-      
-      <Text style={styles.instructionText}>
-        Please select a clear image of a person's back where the spine is visible.
-        For best results, ensure the person is standing straight with good lighting.
-      </Text>
-    </View>
+    </TouchableWithoutFeedback>
   );
 };
 
@@ -206,6 +226,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    zIndex: 10,
   },
   title: {
     fontSize: 20,
@@ -213,7 +234,8 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   closeButton: {
-    padding: 5,
+    padding: 10,
+    zIndex: 20,
   },
   imageContainer: {
     height: 400,
