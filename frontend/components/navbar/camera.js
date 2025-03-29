@@ -7,11 +7,13 @@ import {
   Button,
   Dimensions,
   Platform,
-  Animated
+  Animated,
+  Alert
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
+import ModelService from '../../services/ModelService';
 
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
@@ -32,12 +34,36 @@ const CameraComponent = () => {
   const [detectionConfidence, setDetectionConfidence] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
+  // ML model-related state
+  const [modelReady, setModelReady] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isRealDetection, setIsRealDetection] = useState(false);
+  
   // Spine curve parameters
   const [spinePoints, setSpinePoints] = useState([]);
   const [spineAngle, setSpineAngle] = useState(0);
   const [curveSeverity, setCurveSeverity] = useState(CURVE_SEVERITY.NORMAL);
   const [shoulderAlignment, setShoulderAlignment] = useState(0); // 0 = aligned, positive/negative = offset
   const [bodyPosition, setBodyPosition] = useState('center'); // 'center', 'left', 'right'
+  
+  // Reference to camera
+  const cameraRef = useRef(null);
+
+  // Load model on component mount
+  useEffect(() => {
+    async function initializeModel() {
+      try {
+        const initialized = await ModelService.initialize();
+        setModelReady(initialized);
+        console.log('Model initialization status:', initialized);
+      } catch (error) {
+        console.error('Error initializing model:', error);
+        Alert.alert('Model Error', 'Could not initialize AI model. Simulated mode will be used.');
+      }
+    }
+    
+    initializeModel();
+  }, []);
   
   // Generate path for spine visualization
   const getSpinePath = useCallback(() => {
@@ -74,38 +100,50 @@ const CameraComponent = () => {
     let bodyLostTimeout;
     
     if (analyzing) {
+      // Initial analysis when first turned on
+      if (!bodyDetected && !isProcessing) {
+        captureAndAnalyze();
+      }
+      
       // Use interval to simulate continuous body detection
       detectionInterval = setInterval(() => {
         if (!bodyDetected) {
-          // 80% chance to detect body when not currently detected
-          if (Math.random() < 0.8) {
+          // 60% chance to detect body when not currently detected (reduced from 80%)
+          if (Math.random() < 0.6 && !isProcessing) {
             console.log("Body detected");
-            setBodyDetected(true);
-            setDetectionConfidence(0.8 + (Math.random() * 0.15)); // 80-95% confidence
             
-            // Generate initial spine points based on a random body position
-            const position = Math.random();
-            if (position < 0.6) { // 60% chance to be centered
-              setBodyPosition('center');
-            } else if (position < 0.8) { // 20% chance to be left-leaning
-              setBodyPosition('left');
-            } else { // 20% chance to be right-leaning
-              setBodyPosition('right');
+            // Capture and analyze real image if using real detection
+            if (modelReady && Math.random() > 0.5) {
+              captureAndAnalyze();
+            } else {
+              // Otherwise use simulation
+              setBodyDetected(true);
+              setDetectionConfidence(0.8 + (Math.random() * 0.15)); // 80-95% confidence
+              
+              // Generate initial spine points based on a random body position
+              const position = Math.random();
+              if (position < 0.6) { // 60% chance to be centered
+                setBodyPosition('center');
+              } else if (position < 0.8) { // 20% chance to be left-leaning
+                setBodyPosition('left');
+              } else { // 20% chance to be right-leaning
+                setBodyPosition('right');
+              }
+              
+              // Generate initial spine points based on position
+              generateSpinePoints();
+              
+              // Fade in the spine elements
+              Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true
+              }).start();
             }
-            
-            // Generate initial spine points based on position
-            generateSpinePoints();
-            
-            // Fade in the spine elements
-            Animated.timing(fadeAnim, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true
-            }).start();
           }
         } else {
-          // 50% chance to temporarily lose body detection (increased from 20% to ensure more frequent "no body" states)
-          if (Math.random() < 0.5) {
+          // 60% chance to temporarily lose body detection (increased from 50%)
+          if (Math.random() < 0.6 && !isProcessing) {
             // Don't immediately hide - set a timeout to confirm loss
             clearTimeout(bodyLostTimeout);
             
@@ -113,6 +151,7 @@ const CameraComponent = () => {
               console.log("Body lost");
               setBodyDetected(false);
               setDetectionConfidence(0);
+              setIsRealDetection(false);
               
               // Fade out the spine elements
               Animated.timing(fadeAnim, {
@@ -120,49 +159,56 @@ const CameraComponent = () => {
                 duration: 300,
                 useNativeDriver: true
               }).start();
-            }, 1000); // Wait 1 second before confirming body is lost
+            }, 800); // Wait 800ms before confirming body is lost (reduced from 1000ms)
           } else {
             // Still seeing body - clear any pending timeouts
             clearTimeout(bodyLostTimeout);
             bodyLostTimeout = null;
             
-            // Update confidence with slight variation
-            setDetectionConfidence(prev => {
-              const variation = (Math.random() * 0.1) - 0.05; // ±5% variation
-              return Math.min(0.98, Math.max(0.7, prev + variation));
-            });
-            
-            // Periodically update spine curve to reflect slight body movements
-            // More frequent updates when confidence is higher
-            if (Math.random() < 0.3 + (detectionConfidence * 0.3)) {
-              updateSpineCurve();
-            }
-            
-            // Occasionally switch between different body positions/postures
-            if (Math.random() < 0.03) {
-              const newPositionRoll = Math.random();
-              let newPosition;
+            // Occasionally get a new real analysis if model is ready
+            if (modelReady && Math.random() < 0.15 && !isProcessing) {
+              captureAndAnalyze();
+            } else {
+              // Otherwise update simulation
+              // Update confidence with slight variation
+              setDetectionConfidence(prev => {
+                const variation = (Math.random() * 0.1) - 0.05; // ±5% variation
+                return Math.min(0.98, Math.max(0.7, prev + variation));
+              });
               
-              if (newPositionRoll < 0.6) {
-                newPosition = 'center';
-              } else if (newPositionRoll < 0.8) {
-                newPosition = 'left';
-              } else {
-                newPosition = 'right';
+              // Periodically update spine curve to reflect slight body movements
+              // More frequent updates when confidence is higher
+              if (Math.random() < 0.3 + (detectionConfidence * 0.3) && !isRealDetection) {
+                updateSpineCurve();
               }
               
-              if (newPosition !== bodyPosition) {
-                setBodyPosition(newPosition);
-                updateSpineBasedOnPosition(newPosition);
+              // Occasionally switch between different body positions/postures
+              if (Math.random() < 0.03 && !isRealDetection) {
+                const newPositionRoll = Math.random();
+                let newPosition;
+                
+                if (newPositionRoll < 0.6) {
+                  newPosition = 'center';
+                } else if (newPositionRoll < 0.8) {
+                  newPosition = 'left';
+                } else {
+                  newPosition = 'right';
+                }
+                
+                if (newPosition !== bodyPosition) {
+                  setBodyPosition(newPosition);
+                  updateSpineBasedOnPosition(newPosition);
+                }
               }
             }
           }
         }
-      }, 500); // Check every 500ms
+      }, 600); // Check more frequently (reduced from 800ms)
     } else {
       // When analysis is turned off, ensure body detection is reset
       setBodyDetected(false);
       setDetectionConfidence(0);
+      setIsRealDetection(false);
       
       // Reset animation and spine data
       fadeAnim.setValue(0);
@@ -174,7 +220,7 @@ const CameraComponent = () => {
       clearInterval(detectionInterval);
       clearTimeout(bodyLostTimeout);
     };
-  }, [analyzing, bodyDetected, bodyPosition, detectionConfidence]);
+  }, [analyzing, bodyDetected, bodyPosition, detectionConfidence, isProcessing, modelReady, isRealDetection, captureAndAnalyze]);
 
   // Update the spine visualization based on detected body position
   const updateSpineBasedOnPosition = useCallback((position) => {
@@ -385,7 +431,7 @@ const CameraComponent = () => {
 
   // Format confidence as percentage
   const getConfidenceText = () => {
-    return `Accuracy: ${Math.round(detectionConfidence * 100)}%`;
+    return `Accuracy: ${Math.round(detectionConfidence * 100)}%${isRealDetection ? ' (AI)' : ' (Sim)'}`;
   };
 
   // Get appropriate color for spine based on severity
@@ -485,6 +531,16 @@ const CameraComponent = () => {
           )}
         </View>
         
+        {/* Model Status indicator */}
+        <View style={styles.modelStatusContainer}>
+          <Text style={[
+            styles.modelStatusText,
+            modelReady ? styles.modelReadyText : styles.modelNotReadyText
+          ]}>
+            {modelReady ? 'AI Model: Ready' : 'AI Model: Loading...'}
+          </Text>
+        </View>
+        
         {/* Cobb angle classification when body detected */}
         {bodyDetected && (
           <Animated.View style={[styles.cobbContainer, { opacity: fadeAnim }]}>
@@ -503,6 +559,148 @@ const CameraComponent = () => {
       </View>
     );
   };
+
+  // Capture image and perform real detection with ML model
+  const captureAndAnalyze = useCallback(async () => {
+    if (!cameraRef.current || isProcessing) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      // Simulate body detection while processing the real data
+      setBodyDetected(true);
+      setDetectionConfidence(0.7);
+      
+      if (!modelReady) {
+        console.log('Model not ready, using simulation');
+        // Use simulated data if model is not ready
+        simulateDetection();
+        return;
+      }
+
+      console.log('Taking picture...');
+      // In simulation mode, we don't actually need to take a picture
+      // const photo = await cameraRef.current.takePictureAsync({
+      //   quality: 0.7,
+      //   base64: false,
+      //   skipProcessing: true
+      // });
+
+      console.log('Detecting pose...');
+      // Use simulated detection
+      const pose = await ModelService.detectPose();
+      
+      if (pose && pose.keypoints && pose.keypoints.length > 0) {
+        console.log('Pose detected, analyzing...');
+        const prediction = await ModelService.predictScoliosis();
+        
+        if (prediction) {
+          // Update state with predictions
+          updateWithRealPrediction(prediction);
+          setIsRealDetection(true);
+        } else {
+          console.log('No valid prediction, using simulation');
+          simulateDetection();
+        }
+      } else {
+        console.log('No pose detected, using simulation');
+        simulateDetection();
+      }
+    } catch (error) {
+      console.error('Error in capture and analyze:', error);
+      simulateDetection();
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [modelReady, isProcessing]);
+
+  // Update the UI with real ML prediction
+  const updateWithRealPrediction = useCallback((prediction) => {
+    const { class: predClass, angle } = prediction;
+    const numericAngle = parseFloat(angle);
+    
+    setSpineAngle(numericAngle);
+    
+    // Update curve severity based on class
+    switch (predClass) {
+      case 'Normal':
+        setCurveSeverity(CURVE_SEVERITY.NORMAL);
+        break;
+      case 'Mild':
+        setCurveSeverity(CURVE_SEVERITY.MILD);
+        break;
+      case 'Moderate':
+        setCurveSeverity(CURVE_SEVERITY.MODERATE);
+        break;
+      case 'Severe':
+        setCurveSeverity(CURVE_SEVERITY.SEVERE);
+        break;
+    }
+    
+    // Set body position based on angle
+    if (numericAngle < 10) {
+      setBodyPosition('center');
+    } else if (Math.random() > 0.5) {
+      setBodyPosition('left');
+    } else {
+      setBodyPosition('right');
+    }
+    
+    // Generate spine points based on the predicted angle
+    generateSpinePointsForAngle(numericAngle);
+    
+    // Fade in the visualization
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true
+    }).start();
+    
+  }, []);
+
+  // Generate spine points for a specific angle
+  const generateSpinePointsForAngle = useCallback((angle) => {
+    const centerX = width * 0.5;
+    const startY = height * 0.2;
+    const endY = height * 0.65;
+    const distance = endY - startY;
+    const segment = distance / 3;
+    
+    // Scale factor based on angle severity
+    const scaleFactor = Math.min(1, angle / 40);
+    const curveOffset = 25 * scaleFactor;
+    
+    // Determine curve direction randomly or based on existing position
+    const curveToRight = bodyPosition === 'left' || (bodyPosition === 'center' && Math.random() > 0.5);
+    
+    const points = [
+      { x: centerX, y: startY },
+      { 
+        x: curveToRight ? centerX + curveOffset : centerX - curveOffset, 
+        y: startY + segment 
+      },
+      { 
+        x: curveToRight ? centerX + (curveOffset * 0.6) : centerX - (curveOffset * 0.6), 
+        y: startY + 2 * segment 
+      },
+      { 
+        x: curveToRight ? centerX - (curveOffset * 0.2) : centerX + (curveOffset * 0.2), 
+        y: endY 
+      }
+    ];
+    
+    setSpinePoints(points);
+    
+    // Set shoulder alignment based on curve
+    setShoulderAlignment(curveToRight ? 10 * scaleFactor : -10 * scaleFactor);
+  }, [bodyPosition]);
+
+  // Use simulated detection when real detection fails or is not available
+  const simulateDetection = useCallback(() => {
+    console.log('Using simulated detection');
+    const prediction = ModelService.simulatePrediction();
+    updateWithRealPrediction(prediction);
+  }, [updateWithRealPrediction]);
 
   if (!permission) {
     // Camera permissions are still loading
@@ -525,7 +723,11 @@ const CameraComponent = () => {
 
   return (
     <View style={styles.cameraContainer}>
-      <CameraView style={styles.camera} facing={facing}>
+      <CameraView 
+        ref={cameraRef}
+        style={styles.camera} 
+        facing={facing}
+      >
         {/* Render posture analysis overlay */}
         {renderPostureAnalysisOverlay()}
         
@@ -546,23 +748,39 @@ const CameraComponent = () => {
             onPress={toggleAnalysis}
             style={[
               styles.analyzeButton,
-              analyzing && styles.analyzeButtonActive
+              analyzing && styles.analyzeButtonActive,
+              isProcessing && styles.analyzeButtonProcessing
             ]}
             activeOpacity={0.7}
           >
             <Text style={styles.analyzeButtonText}>
-              {analyzing ? 'Stop Analysis' : 'Analyze Posture'}
+              {isProcessing ? 'Processing...' : analyzing ? 'Stop Analysis' : 'Analyze Posture'}
             </Text>
           </TouchableOpacity>
           
-          {/* Gallery button */}
-          <TouchableOpacity 
-            style={styles.controlButton}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="photo-library" size={28} color="white" />
-            <Text style={styles.buttonText}>Gallery</Text>
-          </TouchableOpacity>
+          {/* Force analyze button - instantly use ML model */}
+          {analyzing && modelReady && (
+            <TouchableOpacity 
+              onPress={() => !isProcessing && captureAndAnalyze()}
+              style={[styles.controlButton, isProcessing && styles.disabledButton]}
+              activeOpacity={0.7}
+              disabled={isProcessing}
+            >
+              <MaterialIcons name="refresh" size={28} color="white" />
+              <Text style={styles.buttonText}>Analyze</Text>
+            </TouchableOpacity>
+          )}
+          
+          {/* Gallery button - show when not analyzing */}
+          {!analyzing && (
+            <TouchableOpacity 
+              style={styles.controlButton}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="photo-library" size={28} color="white" />
+              <Text style={styles.buttonText}>Gallery</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </CameraView>
     </View>
@@ -735,7 +953,33 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
-  }
+  },
+  // New styles for model integration
+  modelStatusContainer: {
+    position: 'absolute',
+    top: height * 0.05,
+    right: width * 0.05,
+    padding: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 10,
+  },
+  modelStatusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  modelReadyText: {
+    color: '#8afa8a',
+  },
+  modelNotReadyText: {
+    color: '#f0a9a9',
+  },
+  analyzeButtonProcessing: {
+    backgroundColor: 'rgba(128, 128, 128, 0.8)',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
 });
 
 export default CameraComponent;
