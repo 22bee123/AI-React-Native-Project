@@ -101,7 +101,6 @@ const CameraComponent = ({ onSaveResult }) => {
 
   // Calculate spine curve severity based on angle
   const updateCurveSeverity = useCallback((angle) => {
-    // Using standard clinical guidelines for scoliosis classification
     if (angle < 10) {
       setCurveSeverity(CURVE_SEVERITY.NORMAL);
     } else if (angle < 25) {
@@ -111,55 +110,6 @@ const CameraComponent = ({ onSaveResult }) => {
     } else {
       setCurveSeverity(CURVE_SEVERITY.SEVERE);
     }
-  }, []);
-  
-  // Get class name from angle using clinical guidelines
-  const getClassFromAngle = (angle) => {
-    // Using standard clinical guidelines for scoliosis classification
-    if (angle < 10) return 'Normal';
-    if (angle < 25) return 'Mild';
-    if (angle < 40) return 'Moderate';
-    return 'Severe';
-  };
-  
-  // Improved Cobb angle calculation based on spine points
-  // This mimics the clinical method more accurately
-  const calculateCobbAngle = useCallback((points) => {
-    if (!points || points.length < 4) return 0;
-    
-    const centerX = width * 0.5;
-    
-    // Calculate the superior/inferior endplate angles (using simplified vector math)
-    // Superior endplate angle (top vertebra)
-    const topAngle = Math.atan2(points[1].x - points[0].x, points[1].y - points[0].y);
-    
-    // Inferior endplate angle (bottom vertebra)
-    const bottomAngle = Math.atan2(points[3].x - points[2].x, points[3].y - points[2].y);
-    
-    // Calculate the angle between the two "endplates" in degrees
-    let cobbAngle = Math.abs(topAngle - bottomAngle) * (180 / Math.PI);
-    
-    // The Cobb method measures the angle between the perpendiculars to the endplates
-    // so we use the complementary angle if it exceeds 90 degrees
-    if (cobbAngle > 90) {
-      cobbAngle = 180 - cobbAngle;
-    }
-    
-    // Apply minor correction based on curve patterns seen in real scoliosis cases
-    // This adjusts for the simplified nature of our simulation
-    const curveDirection = points[1].x > centerX ? 1 : -1;
-    const curveOffset = Math.max(
-      Math.abs(points[1].x - centerX),
-      Math.abs(points[2].x - centerX)
-    );
-    
-    // Small correction factor: larger curves need less correction
-    const correctionFactor = Math.max(0, 1 - (cobbAngle / 60));
-    
-    // Apply the correction
-    cobbAngle = cobbAngle * (1 + correctionFactor * 0.15);
-    
-    return Math.round(cobbAngle);
   }, []);
   
   // Improved body detection simulation with more realistic movement
@@ -453,10 +403,12 @@ const CameraComponent = ({ onSaveResult }) => {
     
     setSpinePoints(newPoints);
     
-    // Calculate Cobb angle using the improved method
-    const angle = calculateCobbAngle(newPoints);
+    // Calculate angle based on control points
+    const segment = (newPoints[3].y - newPoints[0].y) / 3;
+    const angle = Math.abs(Math.atan2(newPoints[1].x - centerX, segment) * 180 / Math.PI) + 
+                Math.abs(Math.atan2(newPoints[2].x - centerX, segment) * 180 / Math.PI);
     
-    setSpineAngle(angle);
+    setSpineAngle(Math.round(angle));
     updateCurveSeverity(angle);
     
     // Update shoulder alignment occasionally with subtle changes
@@ -476,7 +428,7 @@ const CameraComponent = ({ onSaveResult }) => {
         }
       });
     }
-  }, [spinePoints, bodyPosition, updateCurveSeverity, calculateCobbAngle]);
+  }, [spinePoints, bodyPosition, updateCurveSeverity]);
 
   // Toggle camera facing
   const toggleCameraFacing = useCallback(() => {
@@ -507,6 +459,14 @@ const CameraComponent = ({ onSaveResult }) => {
     if (spineAngle > 10) return "#FFFF00"; // Mild - yellow
     return "#8afa8a"; // Normal - green
   }, [spineAngle]);
+
+  // Get class name from angle
+  const getClassFromAngle = (angle) => {
+    if (angle < 10) return 'Normal';
+    if (angle < 25) return 'Mild';
+    if (angle < 40) return 'Moderate';
+    return 'Severe';
+  };
 
   // Save current analysis to gallery
   const saveCurrentAnalysis = async () => {
@@ -804,63 +764,35 @@ const CameraComponent = ({ onSaveResult }) => {
 
       console.log('Taking picture and detecting pose...');
       
-      // Capture multiple frames for improved accuracy
-      const attemptPoseDetection = async (attempt = 0, maxAttempts = 3) => {
-        if (attempt >= maxAttempts) {
-          console.log(`Failed to detect pose after ${maxAttempts} attempts, using simulation`);
-          simulateDetection();
-          return;
-        }
+      // In a real implementation, we would:
+      // 1. Take a picture using cameraRef.current.takePictureAsync()
+      // 2. Convert the image to a format suitable for pose detection
+      // 3. Pass the image to a pose detection model
+      
+      // For now, we'll use the model from backend via ModelService
+      const pose = await ModelService.detectPose(cameraRef);
+      
+      if (pose && pose.keypoints && pose.keypoints.length > 0) {
+        console.log('Pose detected, analyzing scoliosis...');
+        // Increase confidence when using real model
+        setDetectionConfidence(0.85 + (Math.random() * 0.1)); // 85-95% confidence
         
-        try {
-          // Use the model from backend via ModelService
-          const pose = await ModelService.detectPose(cameraRef);
-          
-          // Check for valid pose detection
-          if (pose && pose.keypoints && pose.keypoints.length >= 15) { // Ensure enough keypoints
-            console.log(`Pose detected on attempt ${attempt+1} with ${pose.keypoints.length} keypoints`);
-            
-            // Filter and clean keypoints - improve detection quality
-            const filteredKeypoints = cleanKeypoints(pose.keypoints);
-            
-            if (isValidPosturePose(filteredKeypoints)) {
-              // Calculate detection confidence based on keypoint scores
-              const avgConfidence = filteredKeypoints.reduce(
-                (sum, kp) => sum + kp.score, 0
-              ) / filteredKeypoints.length;
-              
-              // Set confidence based on actual keypoint quality
-              setDetectionConfidence(0.7 + (avgConfidence * 0.3)); // 70-100% confidence
-              
-              // Process keypoints with model
-              const prediction = await ModelService.predictScoliosis(filteredKeypoints);
-              
-              if (prediction && prediction.class) {
-                console.log('Prediction received:', prediction);
-                // Update state with predictions
-                updateWithRealPrediction(prediction);
-                setIsRealDetection(true);
-                return true;
-              }
-            }
-          }
-          
-          // If we're here, detection was not successful - try again
-          console.log(`Attempt ${attempt+1} failed, trying again...`);
-          return attemptPoseDetection(attempt + 1, maxAttempts);
-          
-        } catch (error) {
-          console.error(`Error in detection attempt ${attempt+1}:`, error);
-          if (attempt >= maxAttempts - 1) {
-            simulateDetection();
-          } else {
-            return attemptPoseDetection(attempt + 1, maxAttempts);
-          }
+        // Process keypoints with model
+        const prediction = await ModelService.predictScoliosis(pose.keypoints);
+        
+        if (prediction) {
+          console.log('Prediction received:', prediction);
+          // Update state with predictions
+          updateWithRealPrediction(prediction);
+          setIsRealDetection(true);
+        } else {
+          console.log('No valid prediction, using simulation');
+          simulateDetection();
         }
-      };
-      
-      await attemptPoseDetection();
-      
+      } else {
+        console.log('No pose detected, using simulation');
+        simulateDetection();
+      }
     } catch (error) {
       console.error('Error in capture and analyze:', error);
       simulateDetection();
@@ -868,74 +800,6 @@ const CameraComponent = ({ onSaveResult }) => {
       setIsProcessing(false);
     }
   }, [modelReady, isProcessing, simulateDetection, updateWithRealPrediction]);
-  
-  // Check if pose has required keypoints for posture analysis
-  const isValidPosturePose = useCallback((keypoints) => {
-    // Define essential keypoints for spine angle calculation
-    const essentialKeypoints = [
-      'nose', 'leftShoulder', 'rightShoulder', 
-      'leftHip', 'rightHip', 'leftEar', 'rightEar'
-    ];
-    
-    // Check if all essential keypoints are present with adequate confidence
-    const missingKeypoints = essentialKeypoints.filter(name => 
-      !keypoints.find(kp => kp.name === name && kp.score > 0.5)
-    );
-    
-    if (missingKeypoints.length > 0) {
-      console.log('Missing essential keypoints:', missingKeypoints);
-      return false;
-    }
-    
-    // Additional checks for proper pose alignment
-    // Ensure the person is facing the right direction
-    const leftShoulder = keypoints.find(kp => kp.name === 'leftShoulder');
-    const rightShoulder = keypoints.find(kp => kp.name === 'rightShoulder');
-    
-    if (leftShoulder && rightShoulder) {
-      // Check if shoulders are approximately level (allowing for some tilt)
-      const shoulderHeightDiff = Math.abs(leftShoulder.y - rightShoulder.y);
-      const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
-      
-      if (shoulderHeightDiff > shoulderWidth * 0.5) {
-        console.log('Person appears to be rotated too much - shoulders not level');
-        return false;
-      }
-    }
-    
-    return true;
-  }, []);
-  
-  // Clean and filter keypoints for better analysis
-  const cleanKeypoints = useCallback((keypoints) => {
-    // Filter out low confidence keypoints
-    const filteredKeypoints = keypoints.filter(kp => kp.score > 0.3);
-    
-    // Enhance keypoint position based on relationship constraints
-    // For example, ensure shoulders are at appropriate height relative to head
-    const enhancedKeypoints = [...filteredKeypoints];
-    
-    // Find reference keypoints
-    const nose = enhancedKeypoints.find(kp => kp.name === 'nose');
-    const leftShoulder = enhancedKeypoints.find(kp => kp.name === 'leftShoulder');
-    const rightShoulder = enhancedKeypoints.find(kp => kp.name === 'rightShoulder');
-    
-    // Apply anatomical constraints
-    if (nose && leftShoulder && rightShoulder) {
-      // Ensure shoulders are below nose
-      if (leftShoulder.y < nose.y) {
-        leftShoulder.y = nose.y + (width * 0.05);
-        leftShoulder.score = Math.max(0.6, leftShoulder.score); // Adjust confidence
-      }
-      
-      if (rightShoulder.y < nose.y) {
-        rightShoulder.y = nose.y + (width * 0.05);
-        rightShoulder.score = Math.max(0.6, rightShoulder.score); // Adjust confidence
-      }
-    }
-    
-    return enhancedKeypoints;
-  }, []);
 
   // Update the UI with real ML prediction
   const updateWithRealPrediction = useCallback((prediction) => {
@@ -960,34 +824,17 @@ const CameraComponent = ({ onSaveResult }) => {
         break;
     }
     
-    // Use the angle for more accurate body position determination
+    // Set body position based on angle
     if (numericAngle < 10) {
       setBodyPosition('center');
-    } else if (numericAngle < 25) {
-      // For mild curves, determine direction based on detection or randomly
-      if (prediction.direction) {
-        setBodyPosition(prediction.direction === 'right' ? 'left' : 'right');
-      } else {
-        setBodyPosition(Math.random() > 0.5 ? 'left' : 'right');
-      }
-    } else if (numericAngle < 40) {
-      // For moderate curves, more likely to show pronounced leaning
-      if (prediction.direction) {
-        setBodyPosition(prediction.direction === 'right' ? 'left' : 'right');
-      } else {
-        setBodyPosition(Math.random() > 0.3 ? 'left' : 'right');
-      }
+    } else if (Math.random() > 0.5) {
+      setBodyPosition('left');
     } else {
-      // For severe curves, very pronounced leaning
-      if (prediction.direction) {
-        setBodyPosition(prediction.direction === 'right' ? 'left' : 'right');
-      } else {
-        setBodyPosition(Math.random() > 0.2 ? 'left' : 'right');
-      }
+      setBodyPosition('right');
     }
     
-    // Generate spine points based on the predicted angle and class
-    generateSpinePointsForAngle(numericAngle, predClass);
+    // Generate spine points based on the predicted angle
+    generateSpinePointsForAngle(numericAngle);
     
     // Fade in the visualization
     Animated.timing(fadeAnim, {
@@ -998,133 +845,47 @@ const CameraComponent = ({ onSaveResult }) => {
     
   }, []);
 
-  // Generate spine points for a specific angle with improved accuracy
-  const generateSpinePointsForAngle = useCallback((angle, classType) => {
+  // Generate spine points for a specific angle
+  const generateSpinePointsForAngle = useCallback((angle) => {
     const centerX = width * 0.5;
     const startY = height * 0.2;
     const endY = height * 0.65;
     const distance = endY - startY;
     const segment = distance / 3;
     
-    // Scale factor based on angle severity - more accurate curve representation
-    let scaleFactor;
+    // Scale factor based on angle severity
+    const scaleFactor = Math.min(1, angle / 40);
+    const curveOffset = 25 * scaleFactor;
     
-    // Use class-based scaling for more realistic curve shapes
-    switch(classType) {
-      case 'Normal':
-        scaleFactor = Math.min(0.2, angle / 10);
-        break;
-      case 'Mild':
-        scaleFactor = 0.2 + Math.min(0.3, (angle - 10) / 15);
-        break;
-      case 'Moderate':
-        scaleFactor = 0.5 + Math.min(0.3, (angle - 25) / 15);
-        break;
-      case 'Severe':
-        scaleFactor = 0.8 + Math.min(0.2, (angle - 40) / 20);
-        break;
-      default:
-        scaleFactor = Math.min(1, angle / 40);
-    }
+    // Determine curve direction randomly or based on existing position
+    const curveToRight = bodyPosition === 'left' || (bodyPosition === 'center' && Math.random() > 0.5);
     
-    // More accurate curve offset based on angle
-    const curveOffset = Math.min(30, 5 + (40 * scaleFactor));
-    
-    // Determine curve direction based on body position
-    const curveToRight = bodyPosition === 'left';
-    
-    // Calculate more realistic curve points based on scoliosis patterns
-    // S-shaped for moderate to severe, C-shaped for mild to moderate
-    let points;
-    
-    if (angle > 30 && Math.random() > 0.6) {
-      // S-curve (more common in severe scoliosis)
-      points = [
-        { x: centerX, y: startY }, // Top point
-        { 
-          x: curveToRight ? centerX + curveOffset : centerX - curveOffset, 
-          y: startY + segment * 0.8
-        },
-        { 
-          x: curveToRight ? centerX - (curveOffset * 0.7) : centerX + (curveOffset * 0.7), 
-          y: startY + segment * 1.8
-        },
-        { x: centerX, y: endY } // Bottom point
-      ];
-    } else {
-      // C-curve (more common in mild to moderate scoliosis)
-      // More natural curve progression with proper biomechanical modeling
-      points = [
-        { x: centerX, y: startY }, // Top point
-        { 
-          x: curveToRight ? centerX + curveOffset * 0.8 : centerX - curveOffset * 0.8, 
-          y: startY + segment
-        },
-        { 
-          x: curveToRight ? centerX + curveOffset : centerX - curveOffset, 
-          y: startY + 2 * segment
-        },
-        { 
-          x: curveToRight ? centerX + (curveOffset * 0.3) : centerX - (curveOffset * 0.3), 
-          y: endY
-        }
-      ];
-    }
+    const points = [
+      { x: centerX, y: startY },
+      { 
+        x: curveToRight ? centerX + curveOffset : centerX - curveOffset, 
+        y: startY + segment 
+      },
+      { 
+        x: curveToRight ? centerX + (curveOffset * 0.6) : centerX - (curveOffset * 0.6), 
+        y: startY + 2 * segment 
+      },
+      { 
+        x: curveToRight ? centerX - (curveOffset * 0.2) : centerX + (curveOffset * 0.2), 
+        y: endY 
+      }
+    ];
     
     setSpinePoints(points);
     
-    // Calculate shoulder and hip alignment based on curve type and severity
-    // More accurate anatomical model
-    let shoulderAlignmentValue;
-    
-    if (angle < 10) {
-      // Normal: minimal shoulder deviation
-      shoulderAlignmentValue = (Math.random() * 4 - 2); // ±2 degrees
-    } else if (angle < 25) {
-      // Mild: noticeable but not severe
-      shoulderAlignmentValue = curveToRight ? 5 + (Math.random() * 5) : -5 - (Math.random() * 5);
-    } else if (angle < 40) {
-      // Moderate: more pronounced
-      shoulderAlignmentValue = curveToRight ? 10 + (Math.random() * 5) : -10 - (Math.random() * 5);
-    } else {
-      // Severe: very pronounced
-      shoulderAlignmentValue = curveToRight ? 15 + (Math.random() * 10) : -15 - (Math.random() * 10);
-    }
-    
-    setShoulderAlignment(shoulderAlignmentValue);
+    // Set shoulder alignment based on curve
+    setShoulderAlignment(curveToRight ? 10 * scaleFactor : -10 * scaleFactor);
   }, [bodyPosition]);
 
   // Use simulated detection when real detection fails or is not available
   const simulateDetection = useCallback(() => {
     console.log('Using simulated detection');
-    
-    // Generate more realistic simulation data
-    let simulatedClass;
-    let simulatedAngle;
-    
-    // Weighted random distribution to match clinical prevalence
-    const roll = Math.random();
-    if (roll < 0.25) { // 25% chance of normal
-      simulatedClass = 'Normal';
-      simulatedAngle = Math.random() * 9; // 0-9 degrees
-    } else if (roll < 0.65) { // 40% chance of mild
-      simulatedClass = 'Mild';
-      simulatedAngle = 10 + Math.random() * 14; // 10-24 degrees
-    } else if (roll < 0.9) { // 25% chance of moderate
-      simulatedClass = 'Moderate';
-      simulatedAngle = 25 + Math.random() * 14; // 25-39 degrees
-    } else { // 10% chance of severe
-      simulatedClass = 'Severe';
-      simulatedAngle = 40 + Math.random() * 20; // 40-60 degrees
-    }
-    
-    const prediction = {
-      class: simulatedClass,
-      angle: simulatedAngle.toFixed(1),
-      direction: Math.random() > 0.5 ? 'right' : 'left'
-    };
-    
-    console.log('Simulated prediction:', prediction);
+    const prediction = ModelService.simulatePrediction();
     updateWithRealPrediction(prediction);
   }, [updateWithRealPrediction]);
 
