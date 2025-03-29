@@ -783,66 +783,72 @@ const CameraComponent = ({ onSaveResult }) => {
         
         {/* Camera controls */}
         <View style={styles.controlsContainer}>
-          {/* Flip camera button */}
-          <TouchableOpacity 
-            onPress={toggleCameraFacing} 
-            style={styles.controlButton}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="flip-camera-ios" size={28} color="white" />
-            <Text style={styles.buttonText}>Flip</Text>
-          </TouchableOpacity>
-          
-          {/* Analyze posture button */}
-          <TouchableOpacity 
-            onPress={toggleAnalysis}
-            style={[
-              styles.analyzeButton,
-              analyzing && styles.analyzeButtonActive,
-              isProcessing && styles.analyzeButtonProcessing
-            ]}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.analyzeButtonText}>
-              {isProcessing ? 'Processing...' : analyzing ? 'Stop Analysis' : 'Analyze Posture'}
-            </Text>
-          </TouchableOpacity>
-          
-          {/* Force analyze button - instantly use ML model */}
-          {analyzing && modelReady && !isProcessing && (
-            <TouchableOpacity 
-              onPress={captureAndAnalyze}
-              style={styles.controlButton}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="refresh" size={28} color="white" />
-              <Text style={styles.buttonText}>Analyze</Text>
-            </TouchableOpacity>
+          {/* When analyzing mode is on, show all three buttons in a row */}
+          {analyzing && (
+            <View style={styles.analyzeButtonsRow}>
+              {/* Force analyze button - on left side */}
+              {modelReady && !isProcessing && (
+                <TouchableOpacity 
+                  onPress={captureAndAnalyze}
+                  style={styles.controlButton}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="refresh" size={28} color="white" />
+                  <Text style={styles.buttonText}>Analyze</Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* Analyze/Stop Analysis button - in center */}
+              <TouchableOpacity 
+                onPress={toggleAnalysis}
+                style={[
+                  styles.analyzeButton,
+                  styles.analyzeButtonActive,
+                  isProcessing && styles.analyzeButtonProcessing
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.analyzeButtonText}>
+                  {isProcessing ? 'Processing...' : 'Stop Analysis'}
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Save button - on right side */}
+              {bodyDetected && !isProcessing && (
+                <TouchableOpacity 
+                  onPress={saveCurrentAnalysis}
+                  style={styles.controlButton}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="save" size={28} color="white" />
+                  <Text style={styles.buttonText}>Save</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
           
-          {/* Save button - Only show when body is detected */}
-          {analyzing && bodyDetected && !isProcessing && (
-            <TouchableOpacity 
-              onPress={saveCurrentAnalysis}
-              style={styles.controlButton}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="save" size={28} color="white" />
-              <Text style={styles.buttonText}>Save</Text>
-            </TouchableOpacity>
-          )}
-          
-          {/* Gallery button - show when not analyzing */}
+          {/* When not analyzing, show only the Analyze Posture button */}
           {!analyzing && (
             <TouchableOpacity 
-              style={styles.controlButton}
+              onPress={toggleAnalysis}
+              style={styles.analyzeButton}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="photo-library" size={28} color="white" />
-              <Text style={styles.buttonText}>Gallery</Text>
+              <Text style={styles.analyzeButtonText}>
+                {isProcessing ? 'Processing...' : 'Analyze Posture'}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Flip camera button moved to top left */}
+        <TouchableOpacity 
+          onPress={toggleCameraFacing} 
+          style={styles.flipButton}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="flip-camera-ios" size={28} color="white" />
+        </TouchableOpacity>
       </CameraView>
     </View>
   );
@@ -984,11 +990,15 @@ const styles = StyleSheet.create({
     bottom: 30,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 20,
     zIndex: 20,
+  },
+  analyzeButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
   },
   controlButton: {
     alignItems: 'center',
@@ -997,6 +1007,17 @@ const styles = StyleSheet.create({
     minWidth: 70,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 10,
+  },
+  flipButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 10,
+    zIndex: 20,
   },
   buttonText: {
     color: 'white',
