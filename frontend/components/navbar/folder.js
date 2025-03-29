@@ -370,6 +370,56 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
     return folder ? folder.images : [];
   };
 
+  // Recommendations based on posture classification
+  const getRecommendations = (classification) => {
+    switch(classification) {
+      case 'Normal':
+        return {
+          title: 'Maintain Your Good Posture',
+          recommendations: [
+            'The patient should maintain good posture, avoid frequent slouching, engage in regular exercise, and adopt lifestyle modifications to support spinal health.'
+          ],
+          icon: 'check-circle'
+        };
+      case 'Mild':
+        return {
+          title: 'Mild Scoliosis Management',
+          recommendations: [
+            'In this case, exercise is usually recommended, along with necessary lifestyle modifications to help manage the condition and prevent progression.'
+          ],
+          note: 'For children with mild scoliosis, treatment may not be necessary as their spine is still developing. Regular check-ups are recommended to monitor any progression. If needed, posture correction and specific exercises can help maintain spinal health.',
+          icon: 'info'
+        };
+      case 'Moderate':
+        return {
+          title: 'Moderate Scoliosis Care',
+          recommendations: [
+            'The patient may require bracing to provide spinal support, in addition to exercise and lifestyle modifications to improve posture and reduce discomfort.'
+          ],
+          icon: 'medical-services'
+        };
+      case 'Severe':
+        return {
+          title: 'Severe Scoliosis Treatment',
+          recommendations: [
+            'Surgical intervention may be necessary to correct the spinal curvature. However, exercise and lifestyle modifications remain important for overall spinal health and recovery.'
+          ],
+          icon: 'priority-high'
+        };
+      default:
+        return {
+          title: 'General Recommendations',
+          recommendations: [
+            'Maintain good posture throughout the day',
+            'Exercise regularly to strengthen core muscles',
+            'Take breaks from prolonged sitting',
+            'Consult with healthcare professionals'
+          ],
+          icon: 'help'
+        };
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -593,41 +643,98 @@ const FolderComponent = forwardRef(({ images = [], onImageSelected, onImageDelet
                 </TouchableOpacity>
               </View>
               
-              <Image 
-                source={{ uri: selectedImage.uri }} 
-                style={styles.fullImage} 
-                resizeMode="contain"
-              />
-              
-              {selectedImage.result && (
-                <View style={styles.resultDetails}>
-                  <Text style={styles.resultTitle}>
-                    Posture Analysis Result
-                  </Text>
-                  <View style={styles.resultRow}>
-                    <Text style={styles.resultLabel}>Classification:</Text>
-                    <Text style={[
-                      styles.resultValue,
-                      selectedImage.result.class === 'Normal' ? styles.normalText :
-                      selectedImage.result.class === 'Mild' ? styles.mildText :
-                      selectedImage.result.class === 'Moderate' ? styles.moderateText :
-                      styles.severeText
-                    ]}>
-                      {selectedImage.result.class}
-                    </Text>
-                  </View>
-                  <View style={styles.resultRow}>
-                    <Text style={styles.resultLabel}>Cobb Angle:</Text>
-                    <Text style={styles.resultValue}>{selectedImage.result.angle}°</Text>
-                  </View>
-                  <View style={styles.resultRow}>
-                    <Text style={styles.resultLabel}>Date:</Text>
-                    <Text style={styles.resultValue}>
-                      {selectedImage.timestamp ? new Date(selectedImage.timestamp).toLocaleDateString() : 'Unknown'}
-                    </Text>
-                  </View>
-                </View>
-              )}
+              <ScrollView style={styles.resultScrollView}>
+                <Image 
+                  source={{ uri: selectedImage.uri }} 
+                  style={styles.fullImage} 
+                  resizeMode="contain"
+                />
+                
+                {selectedImage.result && (
+                  <>
+                    <View style={styles.resultDetails}>
+                      <Text style={styles.resultTitle}>
+                        Posture Analysis Result
+                      </Text>
+                      <View style={styles.resultRow}>
+                        <Text style={styles.resultLabel}>Classification:</Text>
+                        <Text style={[
+                          styles.resultValue,
+                          selectedImage.result.class === 'Normal' ? styles.normalText :
+                          selectedImage.result.class === 'Mild' ? styles.mildText :
+                          selectedImage.result.class === 'Moderate' ? styles.moderateText :
+                          styles.severeText
+                        ]}>
+                          {selectedImage.result.class}
+                        </Text>
+                      </View>
+                      <View style={styles.resultRow}>
+                        <Text style={styles.resultLabel}>Cobb Angle:</Text>
+                        <Text style={styles.resultValue}>{selectedImage.result.angle}°</Text>
+                      </View>
+                      <View style={styles.resultRow}>
+                        <Text style={styles.resultLabel}>Date:</Text>
+                        <Text style={styles.resultValue}>
+                          {selectedImage.timestamp ? new Date(selectedImage.timestamp).toLocaleDateString() : 'Unknown'}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    {/* Recommendations Section */}
+                    {selectedImage.result.class && (
+                      <View style={styles.recommendationsContainer}>
+                        {(() => {
+                          const recData = getRecommendations(selectedImage.result.class);
+                          const borderColor = 
+                            selectedImage.result.class === 'Normal' ? '#1A5741' :
+                            selectedImage.result.class === 'Mild' ? '#cca300' :
+                            selectedImage.result.class === 'Moderate' ? '#cc7a00' :
+                            '#cc0000';
+                            
+                          return (
+                            <>
+                              <View style={[
+                                styles.recommendationHeaderRow,
+                                selectedImage.result.class === 'Normal' ? styles.normalHeader :
+                                selectedImage.result.class === 'Mild' ? styles.mildHeader :
+                                selectedImage.result.class === 'Moderate' ? styles.moderateHeader :
+                                styles.severeHeader
+                              ]}>
+                                <MaterialIcons 
+                                  name={recData.icon} 
+                                  size={28} 
+                                  color="#FFFFFF" 
+                                />
+                                <Text style={styles.recommendationsTitle}>{recData.title}</Text>
+                              </View>
+                              
+                              <View style={styles.recommendationContent}>
+                                {recData.recommendations.map((rec, index) => (
+                                  <View key={index} style={[
+                                    styles.recommendationItem,
+                                    { borderLeftColor: borderColor }
+                                  ]}>
+                                    <Text style={styles.recommendationText}>{rec}</Text>
+                                  </View>
+                                ))}
+                                
+                                {recData.note && (
+                                  <View style={styles.noteContainer}>
+                                    <View style={styles.noteIconContainer}>
+                                      <MaterialIcons name="lightbulb" size={20} color="#cca300" />
+                                    </View>
+                                    <Text style={styles.noteText}>{recData.note}</Text>
+                                  </View>
+                                )}
+                              </View>
+                            </>
+                          );
+                        })()}
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
             </View>
           </View>
         )}
@@ -892,24 +999,19 @@ const styles = StyleSheet.create({
   },
   resultModalContent: {
     width: '90%',
-    height: '80%',
+    height: '85%',
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 15,
     position: 'relative',
   },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 15,
-    padding: 5,
+  resultScrollView: {
+    flex: 1,
+    marginTop: 40,
   },
   fullImage: {
     width: '100%',
-    height: '60%',
+    height: 300,
     borderRadius: 8,
     marginBottom: 15,
   },
@@ -956,6 +1058,105 @@ const styles = StyleSheet.create({
   severeText: { 
     color: '#cc0000' 
   },
+  recommendationsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginTop: 15,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    overflow: 'hidden',
+  },
+  recommendationHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    marginBottom: 0,
+  },
+  recommendationsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginLeft: 10,
+  },
+  recommendationContent: {
+    padding: 15,
+  },
+  recommendationItem: {
+    marginBottom: 15,
+    backgroundColor: '#F9FAFB',
+    padding: 15,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1A5741',
+  },
+  recommendationText: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+  },
+  noteContainer: {
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 8,
+    padding: 15,
+    marginTop: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#cca300',
+    flexDirection: 'row',
+  },
+  noteIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  noteText: {
+    fontSize: 14,
+    color: '#333',
+    fontStyle: 'italic',
+    lineHeight: 20,
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 10,
+    position: 'absolute',
+    top: 10,
+    zIndex: 10,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 15,
+    padding: 5,
+  },
+  deleteIcon: {
+    alignSelf: 'center',
+    marginBottom: 15,
+  },
+  deleteImageButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 15,
+    padding: 5,
+  },
+  deleteButton: {
+    backgroundColor: '#ff6b6b',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+  },
   folderSelectList: {
     maxHeight: 200,
     marginBottom: 10,
@@ -991,29 +1192,17 @@ const styles = StyleSheet.create({
     color: '#1A5741',
     marginLeft: 10,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: 10,
-    position: 'absolute',
-    top: 10,
-    zIndex: 10,
+  normalHeader: {
+    backgroundColor: '#1A5741',
   },
-  deleteIcon: {
-    alignSelf: 'center',
-    marginBottom: 15,
+  mildHeader: {
+    backgroundColor: '#cca300',
   },
-  deleteImageButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 15,
-    padding: 5,
+  moderateHeader: {
+    backgroundColor: '#cc7a00',
   },
-  deleteButton: {
-    backgroundColor: '#ff6b6b',
-  },
-  deleteButtonText: {
-    color: '#FFFFFF',
+  severeHeader: {
+    backgroundColor: '#cc0000',
   },
 });
 
