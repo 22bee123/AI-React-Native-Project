@@ -1,15 +1,19 @@
 import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 
 export default function Index() {
   const [ready, setReady] = useState(false);
+  const [appInitMessage, setAppInitMessage] = useState('Initializing app...');
   
-  // Add a small delay to ensure proper initialization
+  // Add a delay to ensure proper initialization of components
   useEffect(() => {
     const timer = setTimeout(() => {
-      setReady(true);
-    }, 200);
+      setAppInitMessage('Starting app...');
+      setTimeout(() => {
+        setReady(true);
+      }, 300);
+    }, 700);
     
     return () => clearTimeout(timer);
   }, []);
@@ -18,6 +22,7 @@ export default function Index() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1A5741" />
+        <Text style={styles.loadingText}>{appInitMessage}</Text>
       </View>
     );
   }
@@ -32,5 +37,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#1A5741',
   }
 });
