@@ -14,6 +14,7 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
 import ModelService from '../../services/ModelService';
+import PropTypes from 'prop-types';
 
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
@@ -26,7 +27,7 @@ const CURVE_SEVERITY = {
   SEVERE: 'Severe (40°+)'
 };
 
-const CameraComponent = () => {
+const CameraComponent = ({ onSaveResult }) => {
   const [facing, setFacing] = useState('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [analyzing, setAnalyzing] = useState(false);
@@ -442,6 +443,52 @@ const CameraComponent = () => {
     return "#8afa8a"; // Normal - green
   }, [spineAngle]);
 
+  // Save current analysis to gallery
+  const saveCurrentAnalysis = async () => {
+    if (!bodyDetected || !cameraRef.current) {
+      Alert.alert('Error', 'No body detected to save');
+      return;
+    }
+    
+    try {
+      setIsProcessing(true);
+      
+      // Capture the current camera view
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+        skipProcessing: true
+      });
+      
+      // Prepare the analysis result
+      const result = {
+        class: getClassFromAngle(spineAngle),
+        angle: spineAngle.toString()
+      };
+      
+      // Pass to parent for saving (will be handled in homePage.js)
+      if (onSaveResult) {
+        onSaveResult(photo.uri, result);
+      } else {
+        Alert.alert('Success', 'Image captured! (Note: Save functionality not fully connected)');
+      }
+      
+      setIsProcessing(false);
+    } catch (error) {
+      console.error('Error saving analysis:', error);
+      Alert.alert('Error', 'Could not save the analysis');
+      setIsProcessing(false);
+    }
+  };
+  
+  // Get class name from angle
+  const getClassFromAngle = (angle) => {
+    if (angle < 10) return 'Normal';
+    if (angle < 25) return 'Mild';
+    if (angle < 40) return 'Moderate';
+    return 'Severe';
+  };
+
   // Render posture analysis overlay
   const renderPostureAnalysisOverlay = () => {
     if (!analyzing) return null;
@@ -762,15 +809,26 @@ const CameraComponent = () => {
           </TouchableOpacity>
           
           {/* Force analyze button - instantly use ML model */}
-          {analyzing && modelReady && (
+          {analyzing && modelReady && !isProcessing && (
             <TouchableOpacity 
-              onPress={() => !isProcessing && captureAndAnalyze()}
-              style={[styles.controlButton, isProcessing && styles.disabledButton]}
+              onPress={captureAndAnalyze}
+              style={styles.controlButton}
               activeOpacity={0.7}
-              disabled={isProcessing}
             >
               <MaterialIcons name="refresh" size={28} color="white" />
               <Text style={styles.buttonText}>Analyze</Text>
+            </TouchableOpacity>
+          )}
+          
+          {/* Save button - Only show when body is detected */}
+          {analyzing && bodyDetected && !isProcessing && (
+            <TouchableOpacity 
+              onPress={saveCurrentAnalysis}
+              style={styles.controlButton}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="save" size={28} color="white" />
+              <Text style={styles.buttonText}>Save</Text>
             </TouchableOpacity>
           )}
           
@@ -788,6 +846,11 @@ const CameraComponent = () => {
       </CameraView>
     </View>
   );
+};
+
+// Add the onSaveResult prop
+CameraComponent.propTypes = {
+  onSaveResult: PropTypes.func
 };
 
 const styles = StyleSheet.create({

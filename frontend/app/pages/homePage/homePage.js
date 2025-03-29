@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -26,6 +26,10 @@ const HomePage = () => {
   // Set up state for active tab
   const [activeTab, setActiveTab] = useState('home');
   const [userImages, setUserImages] = useState([]);
+  // Add reference to the folder component
+  const folderComponentRef = useRef(null);
+  const [shouldSaveImage, setShouldSaveImage] = useState(false);
+  const [pendingSaveData, setPendingSaveData] = useState(null);
   
   // Initialize with camera tab if coming from splash screen
   useEffect(() => {
@@ -45,6 +49,56 @@ const HomePage = () => {
 
   const handleCameraPress = () => {
     setActiveTab('camera');
+  };
+  
+  // Handle saving image results from camera
+  const handleSaveResult = (imageUri, result) => {
+    console.log('Saving result:', imageUri, result);
+    
+    // Save the image with its prediction result
+    const newImage = {
+      uri: imageUri,
+      result: result,
+      timestamp: new Date().toISOString(),
+      id: Date.now().toString()
+    };
+    
+    // Update local state with the new image
+    setUserImages(prevImages => [newImage, ...prevImages]);
+    
+    // Store for pending save to folder
+    setPendingSaveData(newImage);
+    setShouldSaveImage(true);
+    
+    // Switch to gallery tab to show the result
+    setActiveTab('gallery');
+  };
+  
+  // Effect to save new image when tab changes to gallery
+  useEffect(() => {
+    if (activeTab === 'gallery' && shouldSaveImage && pendingSaveData) {
+      // Small delay to ensure folder component is ready
+      const timer = setTimeout(() => {
+        if (folderComponentRef.current && folderComponentRef.current.saveImageWithResult) {
+          folderComponentRef.current.saveImageWithResult(
+            pendingSaveData.uri,
+            pendingSaveData.result
+          );
+        }
+        setShouldSaveImage(false);
+        setPendingSaveData(null);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, shouldSaveImage, pendingSaveData]);
+
+  // Handle deletion of images from the main state
+  const handleImageDeleted = (imageId) => {
+    // Update the userImages state by removing the deleted image
+    setUserImages(prevImages => 
+      prevImages.filter(image => image.id !== imageId)
+    );
   };
 
   // Render home content
@@ -75,8 +129,14 @@ const HomePage = () => {
       
       {/* Content area */}
       <View style={styles.contentContainer}>
-        {activeTab === 'camera' && <CameraComponent />}
-        {activeTab === 'gallery' && <FolderComponent images={userImages} />}
+        {activeTab === 'camera' && <CameraComponent onSaveResult={handleSaveResult} />}
+        {activeTab === 'gallery' && (
+          <FolderComponent 
+            ref={folderComponentRef}
+            images={userImages}
+            onImageDeleted={handleImageDeleted}
+          />
+        )}
         {activeTab === 'home' && renderHomeContent()}
       </View>
     </SafeAreaView>
