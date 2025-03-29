@@ -8,15 +8,29 @@ import {
   Alert,
   ActivityIndicator,
   TouchableWithoutFeedback,
-  Keyboard
+  Keyboard,
+  Modal,
+  TextInput
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import ModelService from '../../services/ModelService';
+import FolderManager from '../navbar/folder/FolderManager';
+import { SaveToFolderModal } from '../navbar/folder/Modals';
 
 const ImportPicture = ({ onImportResult, onClose }) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // New states for folder saving functionality
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [savingModalVisible, setSavingModalVisible] = useState(false);
+  const [folders, setFolders] = useState([
+    { id: 'default', name: 'All Images', images: [] }
+  ]);
+  const [folderForNewImage, setFolderForNewImage] = useState('default');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
   
   // Pick image from device gallery
   const pickImage = async () => {
@@ -55,6 +69,69 @@ const ImportPicture = ({ onImportResult, onClose }) => {
     if (onClose) {
       onClose();
     }
+  };
+  
+  // Load saved folders from storage
+  const loadSavedFolders = async () => {
+    try {
+      const savedFolders = await FolderManager.loadSavedFolders([]);
+      if (savedFolders.length > 0) {
+        setFolders(savedFolders);
+      }
+    } catch (error) {
+      console.error('Error loading folders:', error);
+    }
+  };
+  
+  // Create a new folder
+  const handleCreateFolder = () => {
+    const newFolder = FolderManager.createFolder(newFolderName, folders);
+    if (newFolder) {
+      setFolders([...folders, newFolder]);
+      setModalVisible(false);
+      setNewFolderName('');
+      
+      // Select the newly created folder
+      setFolderForNewImage(newFolder.id);
+    } else {
+      Alert.alert('Error', 'Could not create folder. Please check the name.');
+    }
+  };
+  
+  // Show create folder modal
+  const showCreateFolderModal = () => {
+    setModalVisible(true);
+  };
+  
+  // Confirm saving the image to selected folder
+  const confirmSaveImage = () => {
+    if (!selectedImage || !analysisResult) return;
+    
+    const imageData = {
+      uri: selectedImage,
+      result: analysisResult,
+      timestamp: new Date().toISOString(),
+      id: Date.now().toString()
+    };
+    
+    const updatedFolders = FolderManager.saveImageToFolder(
+      imageData, 
+      folderForNewImage, 
+      folders
+    );
+    
+    setFolders(updatedFolders);
+    setSavingModalVisible(false);
+    
+    // Pass the result back to the parent component
+    if (onImportResult) {
+      onImportResult(selectedImage, analysisResult, 'import');
+    }
+    
+    Alert.alert('Success', 'Image saved successfully to folder');
+    
+    // Close the import screen after successful save
+    handleClose();
   };
   
   // Analyze the selected image
@@ -133,18 +210,18 @@ const ImportPicture = ({ onImportResult, onClose }) => {
       
       console.log('Final prediction result:', prediction);
       
-      // Pass results back to parent component
-      if (onImportResult) {
-        onImportResult(selectedImage, prediction);
-      }
+      // Store the prediction result
+      setAnalysisResult(prediction);
       
-      // Close import screen after successful analysis
-      if (onClose) {
-        onClose();
-      }
+      // Load folders before showing the folder selection modal
+      await loadSavedFolders();
+      
+      // Show folder selection modal instead of passing results immediately
+      setSavingModalVisible(true);
     } catch (error) {
       console.error('Error analyzing image:', error);
       Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
+      setIsAnalyzing(false);
     } finally {
       setIsAnalyzing(false);
     }
@@ -210,6 +287,53 @@ const ImportPicture = ({ onImportResult, onClose }) => {
           Please select a clear image of a person's back where the spine is visible.
           For best results, ensure the person is standing straight with good lighting.
         </Text>
+        
+        {/* Save to Folder Modal */}
+        <SaveToFolderModal
+          visible={savingModalVisible}
+          onClose={() => setSavingModalVisible(false)}
+          folders={folders}
+          folderForNewImage={folderForNewImage}
+          onSelectFolder={(folderId) => setFolderForNewImage(folderId)}
+          onCreateNewFolder={showCreateFolderModal}
+          onConfirmSave={confirmSaveImage}
+          styles={styles}
+        />
+        
+        {/* New Folder Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={modalVisible}
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Create New Folder</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Folder Name"
+                value={newFolderName}
+                onChangeText={setNewFolderName}
+                autoFocus
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.createButton]}
+                  onPress={handleCreateFolder}
+                >
+                  <Text style={[styles.buttonText, styles.createButtonText]}>Create</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -291,6 +415,103 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     lineHeight: 20,
+  },
+  // Modal styles for folder selection
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 10,
+    padding: 20,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#444',
+  },
+  createButton: {
+    backgroundColor: 'rgba(26, 87, 65, 0.8)',
+  },
+  deleteButton: {
+    backgroundColor: '#ff6b6b',
+  },
+  createButtonText: {
+    color: '#fff',
+  },
+  deleteButtonText: {
+    color: '#fff',
+  },
+  input: {
+    backgroundColor: '#333',
+    color: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  folderSelectList: {
+    maxHeight: 200,
+    marginVertical: 10,
+  },
+  folderSelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 5,
+    backgroundColor: '#333',
+  },
+  selectedFolderItem: {
+    backgroundColor: 'rgba(26, 87, 65, 0.3)',
+  },
+  folderSelectText: {
+    color: '#fff',
+    marginLeft: 10,
+    flex: 1,
+  },
+  newFolderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 5,
+    backgroundColor: '#333',
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#1A5741',
+  },
+  newFolderText: {
+    color: '#1A5741',
+    marginLeft: 10,
   },
 });
 

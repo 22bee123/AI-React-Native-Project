@@ -9,7 +9,8 @@ import {
   Platform,
   Animated,
   Alert,
-  Modal
+  Modal,
+  TextInput
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -17,6 +18,8 @@ import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
 import ModelService from '../../services/ModelService';
 import PropTypes from 'prop-types';
 import ImportPicture from '../import/importpicture';
+import FolderManager from '../navbar/folder/FolderManager';
+import { SaveToFolderModal } from '../navbar/folder/Modals';
 
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
@@ -53,6 +56,17 @@ const CameraComponent = ({ onSaveResult }) => {
   const cameraRef = useRef(null);
 
   const [showImport, setShowImport] = useState(false);
+  
+  // New states for folder saving functionality
+  const [savingModalVisible, setSavingModalVisible] = useState(false);
+  const [pendingImage, setPendingImage] = useState(null);
+  const [pendingResult, setPendingResult] = useState(null);
+  const [folders, setFolders] = useState([
+    { id: 'default', name: 'All Images', images: [] }
+  ]);
+  const [folderForNewImage, setFolderForNewImage] = useState('default');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
   
   // Load model on component mount
   useEffect(() => {
@@ -447,6 +461,14 @@ const CameraComponent = ({ onSaveResult }) => {
     return "#8afa8a"; // Normal - green
   }, [spineAngle]);
 
+  // Get class name from angle
+  const getClassFromAngle = (angle) => {
+    if (angle < 10) return 'Normal';
+    if (angle < 25) return 'Mild';
+    if (angle < 40) return 'Moderate';
+    return 'Severe';
+  };
+
   // Save current analysis to gallery
   const saveCurrentAnalysis = async () => {
     if (!bodyDetected || !cameraRef.current) {
@@ -470,13 +492,15 @@ const CameraComponent = ({ onSaveResult }) => {
         angle: spineAngle.toString()
       };
       
-      // Pass to parent for saving (will be handled in homePage.js)
-      // Include 'camera' as the source to indicate this is from the camera view
-      if (onSaveResult) {
-        onSaveResult(photo.uri, result, 'camera');
-      } else {
-        Alert.alert('Success', 'Image captured! (Note: Save functionality not fully connected)');
-      }
+      // Instead of immediately saving, set pending data and show folder selection
+      await loadSavedFolders();
+      
+      // Store pending image data
+      setPendingImage(photo.uri);
+      setPendingResult(result);
+      
+      // Show folder selection modal
+      setSavingModalVisible(true);
       
       setIsProcessing(false);
     } catch (error) {
@@ -486,12 +510,77 @@ const CameraComponent = ({ onSaveResult }) => {
     }
   };
   
-  // Get class name from angle
-  const getClassFromAngle = (angle) => {
-    if (angle < 10) return 'Normal';
-    if (angle < 25) return 'Mild';
-    if (angle < 40) return 'Moderate';
-    return 'Severe';
+  // Load saved folders from storage
+  const loadSavedFolders = async () => {
+    try {
+      const savedFolders = await FolderManager.loadSavedFolders([]);
+      if (savedFolders.length > 0) {
+        setFolders(savedFolders);
+      }
+    } catch (error) {
+      console.error('Error loading folders:', error);
+    }
+  };
+  
+  // Create a new folder
+  const handleCreateFolder = () => {
+    const newFolder = FolderManager.createFolder(newFolderName, folders);
+    if (newFolder) {
+      setFolders([...folders, newFolder]);
+      setModalVisible(false);
+      setNewFolderName('');
+      
+      // Select the newly created folder
+      setFolderForNewImage(newFolder.id);
+    } else {
+      Alert.alert('Error', 'Could not create folder. Please check the name.');
+    }
+  };
+  
+  // Show create folder modal
+  const showCreateFolderModal = () => {
+    setModalVisible(true);
+  };
+  
+  // Confirm saving the image to selected folder
+  const confirmSaveImage = () => {
+    if (!pendingImage || !pendingResult) return;
+    
+    const imageData = {
+      uri: pendingImage,
+      result: pendingResult,
+      timestamp: new Date().toISOString(),
+      id: Date.now().toString()
+    };
+    
+    const updatedFolders = FolderManager.saveImageToFolder(
+      imageData, 
+      folderForNewImage, 
+      folders
+    );
+    
+    setFolders(updatedFolders);
+    setSavingModalVisible(false);
+    
+    // Pass the result back to the parent component with 'camera_with_folder' to indicate
+    // we've already handled folder selection here and don't need another dialog
+    if (onSaveResult) {
+      onSaveResult(pendingImage, pendingResult, 'camera_with_folder');
+    }
+    
+    // Reset pending data
+    setPendingImage(null);
+    setPendingResult(null);
+    
+    Alert.alert('Success', 'Image saved successfully to folder');
+  };
+  
+  // Handle save modal cancellation
+  const handleSaveCancellation = () => {
+    setSavingModalVisible(false);
+    setPendingImage(null);
+    setPendingResult(null);
+    Alert.alert('Cancelled', 'Image was not saved');
   };
 
   // Render posture analysis overlay
@@ -896,6 +985,53 @@ const CameraComponent = ({ onSaveResult }) => {
           onClose={() => setShowImport(false)}
         />
       </Modal>
+      
+      {/* Save to Folder Modal */}
+      <SaveToFolderModal
+        visible={savingModalVisible}
+        onClose={handleSaveCancellation}
+        folders={folders}
+        folderForNewImage={folderForNewImage}
+        onSelectFolder={(folderId) => setFolderForNewImage(folderId)}
+        onCreateNewFolder={showCreateFolderModal}
+        onConfirmSave={confirmSaveImage}
+        styles={styles}
+      />
+      
+      {/* New Folder Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Create New Folder</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Folder Name"
+              value={newFolderName}
+              onChangeText={setNewFolderName}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.createButton]}
+                onPress={handleCreateFolder}
+              >
+                <Text style={[styles.buttonText, styles.createButtonText]}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1121,6 +1257,103 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 25,
     minWidth: 100,
+  },
+  // Add modal styles for folder selection
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 10,
+    padding: 20,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#444',
+  },
+  createButton: {
+    backgroundColor: 'rgba(26, 87, 65, 0.8)',
+  },
+  deleteButton: {
+    backgroundColor: '#ff6b6b',
+  },
+  createButtonText: {
+    color: '#fff',
+  },
+  deleteButtonText: {
+    color: '#fff',
+  },
+  input: {
+    backgroundColor: '#333',
+    color: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  folderSelectList: {
+    maxHeight: 200,
+    marginVertical: 10,
+  },
+  folderSelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 5,
+    backgroundColor: '#333',
+  },
+  selectedFolderItem: {
+    backgroundColor: 'rgba(26, 87, 65, 0.3)',
+  },
+  folderSelectText: {
+    color: '#fff',
+    marginLeft: 10,
+    flex: 1,
+  },
+  newFolderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 5,
+    backgroundColor: '#333',
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#1A5741',
+  },
+  newFolderText: {
+    color: '#1A5741',
+    marginLeft: 10,
   },
 });
 

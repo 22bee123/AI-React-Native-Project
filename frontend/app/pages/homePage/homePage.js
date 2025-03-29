@@ -66,8 +66,8 @@ const HomePage = () => {
     // Update local state with the new image
     setUserImages(prevImages => [newImage, ...prevImages]);
     
-    // Only automatically save to folder if it's coming from camera
-    // Import images don't need folder saving as they'll be saved manually
+    // Only show folder selection for the regular 'camera' source
+    // Skip for 'camera_with_folder' and 'import' which handle their own folder selection
     if (source === 'camera') {
       // Store for pending save to folder
       setPendingSaveData(newImage);
