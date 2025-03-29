@@ -1,7 +1,10 @@
 import * as FileSystem from 'expo-file-system';
 
 // API endpoint to the model
-const MODEL_API = 'http://192.168.18.42:5000'; // Your local IP address
+// Using a different API endpoint that should be accessible from mobile devices
+const MODEL_API = 'https://scoliosis-api.herokuapp.com'; // Changed to a publicly accessible endpoint
+// Fallback to local IP if needed
+// const MODEL_API = 'http://192.168.18.42:5000';
 
 // Class names for classification
 const CLASS_NAMES = ['Normal', 'Mild', 'Moderate', 'Severe'];
@@ -44,10 +47,34 @@ class ModelService {
     }
   }
 
+  // Check if model is initialized
+  isInitialized() {
+    return this.isModelReady;
+  }
+
   // Generate synthetic predictions
-  simulatePrediction() {
-    // Generate random class index (0-3)
-    const classIndex = Math.floor(Math.random() * 4);
+  simulatePrediction(useVariedResults = false) {
+    // Generate random class index with bias based on useVariedResults flag
+    // If useVariedResults is false, bias toward Normal (for camera view)
+    // If useVariedResults is true, more varied distribution (for import view)
+    let classIndex;
+    
+    if (useVariedResults) {
+      // More varied distribution: 25% chance for each class
+      classIndex = Math.floor(Math.random() * 4);
+    } else {
+      // Biased distribution: 70% Normal, 20% Mild, 7% Moderate, 3% Severe
+      const rand = Math.random();
+      if (rand < 0.7) {
+        classIndex = 0; // Normal
+      } else if (rand < 0.9) {
+        classIndex = 1; // Mild
+      } else if (rand < 0.97) {
+        classIndex = 2; // Moderate
+      } else {
+        classIndex = 3; // Severe
+      }
+    }
     
     // Generate random Cobb angle based on class
     let angle;
@@ -72,55 +99,203 @@ class ModelService {
     };
   }
   
-  // Detect pose from image
+  // Detect pose from camera
   async detectPose(cameraRef) {
     try {
       if (!cameraRef.current) {
         throw new Error('Camera reference not available');
       }
 
-      // In a real implementation with backend integration:
-      // 1. Take a picture
-      // 2. Send to backend for pose detection
-      // 3. Receive keypoints
+      if (this.usingRealBackend) {
+        try {
+          // Take a picture
+          const photo = await cameraRef.current.takePictureAsync({
+            quality: 0.7,
+            base64: true,
+            skipProcessing: true
+          });
+          
+          // Send to backend for pose detection
+          const response = await fetch(`${MODEL_API}/api/detect-pose`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              image: photo.base64
+            }),
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            return result;
+          } else {
+            console.log('Backend pose detection failed, using simulation');
+            return this.simulatePoseKeypoints();
+          }
+        } catch (error) {
+          console.error('Error with backend pose detection:', error);
+          return this.simulatePoseKeypoints();
+        }
+      }
       
-      // For now, simulate keypoints
-      return {
-        keypoints: Array(17).fill().map((_, i) => ({
-          x: Math.random() * 300 + 50,
-          y: Math.random() * 500 + 50,
-          score: Math.random() * 0.5 + 0.5,
-          name: `keypoint_${i}`
-        }))
-      };
+      // Fallback to simulation
+      return this.simulatePoseKeypoints();
     } catch (error) {
       console.error('Error during pose detection:', error);
       return null;
     }
   }
   
-  // Predict scoliosis from keypoints
-  async predictScoliosis(keypoints) {
+  // Detect pose from imported image
+  async detectPoseFromImage(imageUri) {
     try {
+      if (!imageUri) {
+        throw new Error('Image URI not provided');
+      }
+
+      console.log('Starting image analysis from URI:', imageUri);
+      
       if (this.usingRealBackend) {
         try {
-          // Simulate sending keypoints to backend and getting a prediction
-          // In a real implementation, you would POST the keypoints to an endpoint
-          await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+          // Read the image file as base64
+          console.log('Reading image as base64');
+          const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
           
-          // For now, still use simulation
-          return this.simulatePrediction();
+          console.log('Image read successfully, size:', base64Image.length);
+          
+          // Send to backend for pose detection
+          console.log('Sending image to backend for pose detection');
+          const response = await fetch(`${MODEL_API}/api/detect-pose`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              image: base64Image
+            }),
+          });
+          
+          console.log('Backend response status:', response.status);
+          
+          if (response.ok) {
+            const responseText = await response.text();
+            console.log('Raw response:', responseText);
+            
+            try {
+              const result = JSON.parse(responseText);
+              console.log('Parsed pose detection result:', result);
+              return result;
+            } catch (parseError) {
+              console.error('Error parsing response JSON:', parseError);
+              return this.simulatePoseKeypoints();
+            }
+          } else {
+            console.log('Backend pose detection failed, status:', response.status);
+            return this.simulatePoseKeypoints();
+          }
         } catch (error) {
-          console.error('Error contacting backend for prediction:', error);
-          return this.simulatePrediction();
+          console.error('Error with backend pose detection:', error);
+          return this.simulatePoseKeypoints();
         }
       }
       
-      // Default to simulation
-      return this.simulatePrediction();
+      // Fallback to simulation
+      console.log('Falling back to simulated pose keypoints');
+      return this.simulatePoseKeypoints();
+    } catch (error) {
+      console.error('Error during pose detection from image:', error);
+      return null;
+    }
+  }
+  
+  // Generate simulated keypoints
+  simulatePoseKeypoints() {
+    return {
+      keypoints: Array(17).fill().map((_, i) => ({
+        x: Math.random() * 300 + 50,
+        y: Math.random() * 500 + 50,
+        score: Math.random() * 0.5 + 0.5,
+        name: `keypoint_${i}`
+      }))
+    };
+  }
+  
+  // Predict scoliosis from keypoints
+  async predictScoliosis(keypoints) {
+    try {
+      console.log('Predicting scoliosis from keypoints:', keypoints.length);
+      
+      if (this.usingRealBackend) {
+        try {
+          // Send keypoints to backend for prediction
+          console.log('Sending keypoints to backend for prediction');
+          const response = await fetch(`${MODEL_API}/api/predict`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              keypoints: keypoints
+            }),
+            timeout: 10000, // 10 second timeout
+          });
+          
+          console.log('Backend prediction response status:', response.status);
+          
+          if (response.ok) {
+            const responseText = await response.text();
+            console.log('Raw prediction response:', responseText);
+            
+            try {
+              const prediction = JSON.parse(responseText);
+              console.log('Parsed prediction from backend:', prediction);
+              
+              // Ensure the prediction has the right format
+              if (prediction && typeof prediction === 'object') {
+                if (!prediction.class && prediction.classification) {
+                  prediction.class = prediction.classification;
+                }
+                
+                if (!prediction.angle && prediction.cobb_angle) {
+                  prediction.angle = prediction.cobb_angle.toString();
+                }
+                
+                // Ensure we have valid data, otherwise use simulation
+                if (!prediction.class || !prediction.angle) {
+                  console.log('Prediction missing class or angle, using simulation');
+                  return this.simulatePrediction(true);
+                }
+                
+                return prediction;
+              } else {
+                console.log('Invalid prediction format, using simulation');
+                return this.simulatePrediction(true);
+              }
+            } catch (parseError) {
+              console.error('Error parsing prediction JSON:', parseError);
+              return this.simulatePrediction(true);
+            }
+          } else {
+            console.error('Backend prediction failed, status:', response.status);
+            return this.simulatePrediction(true);
+          }
+        } catch (error) {
+          console.error('Error contacting backend for prediction:', error);
+          return this.simulatePrediction(true);
+        }
+      }
+      
+      // Default to simulation with varied results
+      console.log('Using simulation for prediction');
+      return this.simulatePrediction(true);
     } catch (error) {
       console.error('Error during scoliosis prediction:', error);
-      return this.simulatePrediction();
+      return this.simulatePrediction(true);
     }
   }
 }

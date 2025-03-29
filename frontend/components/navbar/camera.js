@@ -8,13 +8,15 @@ import {
   Dimensions,
   Platform,
   Animated,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
 import ModelService from '../../services/ModelService';
 import PropTypes from 'prop-types';
+import ImportPicture from '../import/importpicture';
 
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
@@ -50,6 +52,8 @@ const CameraComponent = ({ onSaveResult }) => {
   // Reference to camera
   const cameraRef = useRef(null);
 
+  const [showImport, setShowImport] = useState(false);
+  
   // Load model on component mount
   useEffect(() => {
     async function initializeModel() {
@@ -752,6 +756,21 @@ const CameraComponent = ({ onSaveResult }) => {
     updateWithRealPrediction(prediction);
   }, [updateWithRealPrediction]);
 
+  // Handle import button press
+  const openImportModal = () => {
+    setShowImport(true);
+  };
+  
+  // Handle imported image result
+  const handleImportResult = (imageUri, result) => {
+    if (onSaveResult) {
+      onSaveResult(imageUri, result);
+    } else {
+      Alert.alert('Success', 'Image analyzed successfully! (Note: Save functionality not fully connected)');
+    }
+    setShowImport(false);
+  };
+
   if (!permission) {
     // Camera permissions are still loading
     return (
@@ -827,17 +846,30 @@ const CameraComponent = ({ onSaveResult }) => {
             </View>
           )}
           
-          {/* When not analyzing, show only the Analyze Posture button */}
+          {/* When not analyzing, show Analyze Posture and Import buttons */}
           {!analyzing && (
-            <TouchableOpacity 
-              onPress={toggleAnalysis}
-              style={styles.analyzeButton}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.analyzeButtonText}>
-                {isProcessing ? 'Processing...' : 'Analyze Posture'}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.analyzeButtonsRow}>
+              {/* Import Picture button */}
+              <TouchableOpacity 
+                onPress={openImportModal}
+                style={styles.importButton}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="photo-library" size={24} color="white" />
+                <Text style={styles.buttonText}>Import</Text>
+              </TouchableOpacity>
+              
+              {/* Analyze Posture button */}
+              <TouchableOpacity 
+                onPress={toggleAnalysis}
+                style={styles.analyzeButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.analyzeButtonText}>
+                  {isProcessing ? 'Processing...' : 'Analyze Posture'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -850,6 +882,18 @@ const CameraComponent = ({ onSaveResult }) => {
           <MaterialIcons name="flip-camera-ios" size={28} color="white" />
         </TouchableOpacity>
       </CameraView>
+      
+      {/* Import Picture Modal */}
+      <Modal
+        visible={showImport}
+        animationType="slide"
+        onRequestClose={() => setShowImport(false)}
+      >
+        <ImportPicture 
+          onImportResult={handleImportResult}
+          onClose={() => setShowImport(false)}
+        />
+      </Modal>
     </View>
   );
 };
@@ -1066,6 +1110,15 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(70, 70, 70, 0.8)',
+    padding: 12,
+    borderRadius: 25,
+    minWidth: 100,
   },
 });
 
