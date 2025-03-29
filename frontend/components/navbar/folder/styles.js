@@ -406,6 +406,38 @@ export const styles = StyleSheet.create({
   severeHeader: {
     backgroundColor: '#cc0000',
   },
+  noFoldersContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  noFoldersText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  noFoldersSubText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  createFolderButton: {
+    flexDirection: 'row',
+    backgroundColor: '#1A5741',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  createFolderButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    marginLeft: 10,
+  }
 });
 
 export default styles; 

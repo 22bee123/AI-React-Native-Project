@@ -17,32 +17,22 @@ const FolderManager = {
         const foldersString = await FileSystem.readAsStringAsync(FOLDERS_STORAGE_KEY);
         let folders = JSON.parse(foldersString);
         
-        // Create default folder if it doesn't exist
-        if (!folders.some(folder => folder.id === 'default')) {
-          folders.unshift({ id: 'default', name: 'All Images', images: [] });
-        }
-        
-        // Update the default folder with all images
-        folders = folders.map(folder => {
-          if (folder.id === 'default') {
-            return { ...folder, images: [...images] };
-          }
-          return folder;
-        });
+        // Remove any default "All Images" folder if it exists
+        folders = folders.filter(folder => folder.id !== 'default');
         
         console.log('Loaded folders from storage:', folders.length);
         return folders;
       } else {
-        // File doesn't exist, create default folder with all images
-        const defaultFolders = [{ id: 'default', name: 'All Images', images }];
-        await saveFolders(defaultFolders);
-        console.log('Created default folder');
-        return defaultFolders;
+        // File doesn't exist, create empty folder array
+        const emptyFolders = [];
+        await saveFolders(emptyFolders);
+        console.log('Created empty folders array');
+        return emptyFolders;
       }
     } catch (error) {
       console.error('Error loading folders:', error);
-      // Return default folder if there's an error
-      return [{ id: 'default', name: 'All Images', images }];
+      // Return empty folders array if there's an error
+      return [];
     }
   },
   
@@ -83,12 +73,7 @@ const FolderManager = {
     
     // Update folders
     const updatedFolders = folders.map(f => {
-      if (f.id === 'default') {
-        // Add to default "All Images" folder if not already there
-        if (!f.images.some(img => img.id === image.id)) {
-          return { ...f, images: [image, ...f.images] };
-        }
-      } else if (f.id === folderId) {
+      if (f.id === folderId) {
         // Add to the selected folder
         return { ...f, images: [image, ...f.images] };
       }
@@ -130,8 +115,8 @@ const FolderManager = {
   
   // Delete a folder
   deleteFolder: (folder, folders, currentFolder) => {
-    if (!folder || folder.id === 'default') {
-      console.error('Cannot delete default folder');
+    if (!folder) {
+      console.error('Invalid folder');
       return { updatedFolders: folders, newCurrentFolder: currentFolder };
     }
     
@@ -142,7 +127,9 @@ const FolderManager = {
     const updatedFolders = folders.filter(f => f.id !== folder.id);
     
     // Update current folder if it was the deleted one
-    const newCurrentFolder = currentFolder === folder.id ? 'default' : currentFolder;
+    const newCurrentFolder = currentFolder === folder.id ? 
+      (updatedFolders.length > 0 ? updatedFolders[0].id : null) : 
+      currentFolder;
     
     // Save the updated folders list
     saveFolders(updatedFolders);
@@ -150,7 +137,7 @@ const FolderManager = {
     return { updatedFolders, newCurrentFolder };
   },
   
-  // Delete an image from all folders
+  // Delete an image from a folder
   deleteImage: (image, folders) => {
     if (!image) {
       console.error('No image to delete');
